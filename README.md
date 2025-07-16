@@ -17,12 +17,13 @@ Este proyecto es una Prueba de Concepto (PoC) para Digital Content. El objetivo 
 
 ```bash
 # Clona el repositorio
-git clone https://github.com/tuusuario/content-generator.git
+git clone https://github.com/a-bac-0/Loki.git
 cd content-generator
 
-# Crea el entorno virtual
-python -m venv venv
+# Crea el entorno virtual (usa Python 3.11 recomendado)
+python3.11 -m venv venv
 source venv/bin/activate  # En Windows: venv\Scripts\activate
 
 # Instala las dependencias
 pip install -r requirements.txt
+```
