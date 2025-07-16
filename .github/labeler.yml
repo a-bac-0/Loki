@@ -1,0 +1,20 @@
+# Labeler configuration for PR label automation
+# Labels are applied based on file paths
+
+frontend:
+  - frontend/**
+
+backend:
+  - app/**
+  - config/**
+  - data/**
+
+config:
+  - config/**
+
+test:
+  - test/**
+
+documentation:
+  - README.md
+  - docs/**
