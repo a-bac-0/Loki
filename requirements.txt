@@ -1,0 +1,8 @@
+langchain
+openai
+ollama
+streamlit
+pillow
+requests
+python-dotenv
+pyyaml

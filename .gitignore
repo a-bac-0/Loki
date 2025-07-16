@@ -1,0 +1,61 @@
+Entorno virtual
+venv/
+.venv/
+ENV/
+env/
+*.pyc
+pycache/
+
+Archivos de configuración local
+.env
+*.env
+config/settings_local.yaml
+
+Logs y archivos temporales
+*.log
+*.tmp
+*.bak
+*.swp
+.DS_Store
+Thumbs.db
+
+Archivos generados por Streamlit
+.streamlit/
+.frontend_cache/
+pycache/
+cache/
+
+Archivos generados por Jupyter/VSCode
+.ipynb_checkpoints
+.vscode/
+
+Docker
+*.pid
+*.sock
+*.tar
+docker-compose.override.yml
+
+Archivos de datos generados
+/data/output/
+data/output/
+output/
+*.db
+*.sqlite3
+
+Imágenes generadas (si no quieres trackearlas)
+images_generated/
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+Modelos locales grandes (ej. Ollama, HuggingFace)
+models/
+llm_weights/
+*.bin
+
+Otros directorios comunes
+dist/
+build/
+.eggs/
+*.egg-info/

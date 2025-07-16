@@ -1,0 +1,37 @@
+app:
+name: "Generador de Contenido IA"
+default_language: "es"
+debug: true
+
+llm:
+default_model: "gpt-3.5-turbo"
+available_models:
+- "gpt-3.5-turbo"
+- "llama3"
+provider: "openai" # o "ollama", "local", etc.
+
+image:
+provider: "openai" # o "replicate", "unsplash"
+size: "512x512"
+save_to_disk: true
+output_dir: "images_generated"
+
+paths:
+logs: "logs/"
+temp: "tmp/"
+
+features:
+enable_translation: true
+enable_image_generation: true
+enable_rag: false
+enable_multiagent: false
+
+languages_supported:
+
+es
+
+en
+
+fr
+
+it

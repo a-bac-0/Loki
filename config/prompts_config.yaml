@@ -1,0 +1,28 @@
+default:
+tone: "neutral y profesional"
+structure: "introducción, desarrollo, conclusión"
+language: "es"
+
+platforms:
+twitter:
+tone: "informal y directo, con emojis si aplica"
+structure: "máx. 280 caracteres, llamado a la acción"
+linkedin:
+tone: "profesional con enfoque personal"
+structure: "contexto, reflexión, cierre con pregunta"
+instagram:
+tone: "amigable, visual y aspiracional"
+structure: "mensaje corto + hashtags + llamada emocional"
+blog:
+tone: "profundo y explicativo"
+structure: "título atractivo, desarrollo detallado, conclusión clara"
+
+audiences:
+general:
+tone: "claro y accesible"
+marketers:
+tone: "analítico con enfoque en resultados"
+teenagers:
+tone: "divertido, relajado y con referencias actuales"
+científicos:
+tone: "riguroso pero accesible"
