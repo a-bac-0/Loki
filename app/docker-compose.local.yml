@@ -1,0 +1,12 @@
+services:
+  # Servicio de la aplicación Streamlit (usando Ollama local)
+  streamlit-app:
+    build: .
+    container_name: langchain-streamlit-app
+    ports:
+      - "8501:8501"
+    environment:
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434  # Conecta al Ollama local
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Para Windows/macOS
