@@ -5,3 +5,10 @@ black
 isort
 mypy
 pre-commit
+
+# for creating image
+diffusers>=0.27.0
+pillow>=10.0.0
+transformers
+accelerate
+numpy
