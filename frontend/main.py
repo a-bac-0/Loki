@@ -140,6 +140,20 @@ st.markdown("""
 # AGENTES DE IA - VERSIÓN CORREGIDA
 # ===============================
 
+# Importar el agente de contenido visual
+import sys
+import os
+
+# Añadir el directorio raíz al path para importar módulos
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# Importar el agente de contenido visual si está disponible
+try:
+    from app.agents.content_visual_agent import ContentVisualAgent
+except ImportError:
+    # Si no está disponible, mostraremos un mensaje más adelante
+    pass
+
 class ContentGenerator:
     """Generador de contenido con múltiples opciones de IA"""
     
@@ -518,6 +532,99 @@ class ContentGenerator:
             return None, "Timeout conectando con Groq"
         except Exception as e:
             return None, f"Error con Groq: {str(e)}"
+            
+    def generate_with_lmstudio_comfyui(self, topic, platform, audience, tone="profesional"):
+        """Genera contenido de texto e imagen utilizando LM Studio y ComfyUI"""
+        try:
+            print("\n" + "="*80)
+            print(f"INICIANDO GENERACIÓN DE CONTENIDO VISUAL")
+            print(f"Tema: {topic} | Plataforma: {platform} | Audiencia: {audience} | Tono: {tone}")
+            print("="*80)
+            
+            if not st.session_state.get('has_content_visual_agent', False):
+                print("❌ Error: El agente de contenido visual no está disponible.")
+                return None, "El agente de contenido visual no está disponible. Verifica que los archivos necesarios estén instalados."
+                
+            # Obtener el agente de contenido visual
+            agent = st.session_state.content_visual_agent
+            
+            # Verificar la disponibilidad de los servicios
+            print("\n🔍 Verificando servicios de LM Studio y ComfyUI...")
+            services = agent.check_services()
+            print(f"   - LM Studio: {'✅ Disponible' if services['lmstudio'] else '❌ No disponible'}")
+            print(f"   - ComfyUI: {'✅ Disponible' if services['comfyui'] else '❌ No disponible'}")
+            
+            if not all(services.values()):
+                print("❌ Error: No se pudo conectar a LM Studio o ComfyUI.")
+                return None, "No se pudo conectar a LM Studio o ComfyUI. Verifica que ambos servicios estén en ejecución."
+                
+            # Generar contenido completo (texto e imagen)
+            with st.status("Generando contenido visual...", expanded=True) as status:
+                status.update(label="Generando texto con LM Studio...")
+                
+                # Función para mostrar actualizaciones de estado
+                def status_update(msg):
+                    status.update(label=msg)
+                    print(f"\n🔄 {msg}")
+                
+                print("\n🔄 Iniciando generación de contenido completo...")
+                content_result = agent.generate_complete_content(
+                    topic=topic,
+                    platform=platform,
+                    audience=audience,
+                    tone=tone,
+                    status_callback=status_update
+                )
+                
+                # Mostrar información detallada del proceso
+                print("\n" + "-"*80)
+                print("📋 RESUMEN DEL PROCESO DE GENERACIÓN")
+                print("-"*80)
+                
+                # Mostrar pasos completados
+                for step in content_result.get('steps', []):
+                    status_icon = "✅" if step['status'] == "success" else "❌"
+                    print(f"{status_icon} {step['step']}: {step['details']}")
+                
+                # Mostrar el prompt usado para generar el texto
+                if 'content' in content_result:
+                    print("\n" + "-"*80)
+                    print("📝 TEXTO GENERADO PARA LA PUBLICACIÓN")
+                    print("-"*80)
+                    print(content_result['content'])
+                
+                # Mostrar el prompt usado para generar la imagen
+                if 'image_prompt' in content_result:
+                    print("\n" + "-"*80)
+                    print("🎨 PROMPT USADO PARA GENERAR LA IMAGEN")
+                    print("-"*80)
+                    print(content_result['image_prompt'])
+                
+                # Mostrar información de la imagen generada
+                if 'image_path' in content_result:
+                    print("\n" + "-"*80)
+                    print("🖼️ IMAGEN GENERADA")
+                    print("-"*80)
+                    print(f"Ruta: {content_result['image_path']}")
+                    if 'image_data' in content_result and 'url' in content_result['image_data']:
+                        print(f"URL: {content_result['image_data']['url']}")
+                
+                print("\n" + "="*80)
+                print(f"PROCESO DE GENERACIÓN {'✅ COMPLETADO' if content_result.get('success', False) else '❌ CON ERRORES'}")
+                print("="*80 + "\n")
+                
+                if content_result and 'image_path' in content_result:
+                    status.update(label="¡Contenido visual generado con éxito!", state="complete")
+                    return content_result.get('content', ''), "Contenido e imagen generados con LM Studio y ComfyUI"
+                else:
+                    status.update(label="Se generó el texto pero hubo un problema con la imagen", state="error")
+                    return content_result.get('content', ''), "Texto generado con LM Studio (sin imagen)"
+                    
+        except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"Error detallado: {error_details}")
+            return None, f"Error al generar contenido visual: {str(e)}"
     
     def generate_with_openai(self, topic, platform, audience, tone="profesional"):
         """Generar contenido real con OpenAI"""
@@ -654,7 +761,7 @@ class ContentGenerator:
         return content, f"Contenido demo para {platform} {template_data['emoji']}"
 
 # ===============================
-# INICIALIZAR SESSION STATE
+# Inicializar SESSION STATE
 # ===============================
 
 if 'content_generator' not in st.session_state:
@@ -663,6 +770,34 @@ if 'generated_content' not in st.session_state:
     st.session_state.generated_content = None
 if 'selected_platform' not in st.session_state:
     st.session_state.selected_platform = "Twitter"
+
+# Inicializar el agente de contenido visual si está disponible
+if 'content_visual_agent' not in st.session_state:
+    try:
+        # Ruta al archivo de flujo de trabajo de ComfyUI
+        default_workflow_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "examples", "flujo-imagen-post.json")
+        
+        # Verificar si existe el archivo de flujo de trabajo
+        if os.path.exists(default_workflow_file):
+            print(f"Archivo de flujo de trabajo encontrado en: {default_workflow_file}")
+            st.session_state.content_visual_agent = ContentVisualAgent(workflow_file=default_workflow_file)
+            st.session_state.has_content_visual_agent = True
+        else:
+            print(f"ADVERTENCIA: No se encontró el archivo de flujo de trabajo en: {default_workflow_file}")
+            # Intentar buscar el archivo en otras ubicaciones comunes
+            alt_workflow_file = os.path.join(os.getcwd(), "data", "examples", "flujo-imagen-post.json")
+            if os.path.exists(alt_workflow_file):
+                print(f"Archivo de flujo de trabajo alternativo encontrado en: {alt_workflow_file}")
+                st.session_state.content_visual_agent = ContentVisualAgent(workflow_file=alt_workflow_file)
+                st.session_state.has_content_visual_agent = True
+            else:
+                print(f"ERROR: No se pudo encontrar el archivo de flujo de trabajo en ninguna ubicación")
+                st.session_state.content_visual_agent = ContentVisualAgent()
+                st.session_state.has_content_visual_agent = True
+                st.warning("⚠️ No se encontró el archivo de flujo de trabajo para ComfyUI. La generación de imágenes puede fallar.")
+    except Exception as e:
+        print(f"Error al inicializar el agente de contenido visual: {str(e)}")
+        st.session_state.has_content_visual_agent = False
 
 # ===============================
 # INTERFAZ PRINCIPAL
@@ -681,9 +816,15 @@ with st.sidebar:
     st.markdown("### ⚙️ Configuración")
     
     # Selección de modelo IA
+    ai_models = ["Demo Inteligente", "Groq Llama3 (Gratis)", "OpenAI GPT-3.5", "Ollama Local"]
+    
+    # Añadir la opción de LM Studio + ComfyUI si está disponible
+    if st.session_state.get('has_content_visual_agent', False):
+        ai_models.append("LM Studio + ComfyUI")
+    
     ai_model = st.radio(
         "🤖 Modelo de IA",
-        ["Demo Inteligente", "Groq Llama3 (Gratis)", "OpenAI GPT-3.5", "Ollama Local"],
+        ai_models,
         help="Selecciona qué modelo usar para generar contenido"
     )
     
@@ -886,6 +1027,8 @@ with col1:
                         content, status = generator.generate_with_openai(topic, platform, audience, tone)
                     elif ai_model == "Ollama Local":
                         content, status = generator.generate_with_ollama(topic, platform, audience, tone)
+                    elif ai_model == "LM Studio + ComfyUI" and st.session_state.get('has_content_visual_agent', False):
+                        content, status = generator.generate_with_lmstudio_comfyui(topic, platform, audience, tone)
                     else:  # Demo Inteligente
                         content, status = generator.generate_demo_content(topic, platform, audience, tone)
                     
@@ -912,7 +1055,7 @@ with col1:
                     
                     if content:
                         # Guardar resultado
-                        st.session_state.generated_content = {
+                        result_data = {
                             'topic': topic,
                             'platform': platform,
                             'audience': audience,
@@ -925,6 +1068,18 @@ with col1:
                             'search_keyword_used': search_keyword_used,
                             'timestamp': datetime.now()
                         }
+                        
+                        # Si es LM Studio + ComfyUI, añadir información de la imagen generada
+                        if ai_model == "LM Studio + ComfyUI" and isinstance(content, dict):
+                            # Para el caso de LM Studio + ComfyUI, content es un diccionario
+                            result_data.update({
+                                'content': content.get('content', ''),  # El texto generado
+                                'image_path': content.get('image_path', ''),  # Ruta a la imagen generada
+                                'image_prompt': content.get('image_prompt', ''),  # Prompt usado para generar la imagen
+                                'image_status': 'Imagen generada con ComfyUI'
+                            })
+                        
+                        st.session_state.generated_content = result_data
                         
                         status_text.success("✅ ¡Contenido generado exitosamente!")
                         progress_bar.empty()
@@ -1016,6 +1171,30 @@ if st.session_state.generated_content:
             
             # Botón para descargar imagen
             if st.button("📥 Descargar Imagen Original", use_container_width=True):
+                st.info("💡 Haz clic derecho en la imagen y selecciona 'Guardar imagen como...'")
+    
+    # Mostrar imagen generada por ComfyUI
+    elif 'image_path' in content_data and os.path.exists(content_data['image_path']):
+        st.markdown("#### 🎨 Imagen Generada con ComfyUI")
+        
+        col_img1, col_img2 = st.columns([2, 1])
+        
+        with col_img1:
+            st.image(
+                content_data['image_path'],
+                caption="🖼️ Imagen generada con IA",
+                use_column_width=True
+            )
+        
+        with col_img2:
+            st.markdown("**Detalles de la imagen:**")
+            st.write("**Generada por:** ComfyUI")
+            if 'image_prompt' in content_data:
+                st.write(f"**Prompt:** {content_data['image_prompt'][:100]}...")
+            st.write(f"**Estado:** {content_data.get('image_status', 'Imagen generada con éxito')}")
+            
+            # Botón para descargar imagen
+            if st.button("📥 Descargar Imagen", use_container_width=True):
                 st.info("💡 Haz clic derecho en la imagen y selecciona 'Guardar imagen como...'")
     
     elif content_data.get('image_status'):
