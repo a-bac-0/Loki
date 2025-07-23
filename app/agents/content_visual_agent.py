@@ -15,7 +15,7 @@ class ContentVisualAgent:
     def __init__(self, 
                 lmstudio_url="http://127.0.0.1:1234", 
                 comfyui_url="http://127.0.0.1:8000",
-                workflow_file=None,
+                workflow_file = os.path.join(os.path.dirname(__file__), "..", "..","data", "examples", "flujo-imagen-post.json"),
                 output_dir="images_generated"):
         """Inicializa el agente de contenido visual
         
@@ -25,6 +25,7 @@ class ContentVisualAgent:
             workflow_file (str, optional): Ruta al archivo JSON del flujo de trabajo de ComfyUI
             output_dir (str): Directorio donde se guardarán las imágenes generadas
         """
+
         print(f"Inicializando ContentVisualAgent con flujo de trabajo: {workflow_file}")
         self.lmstudio_generator = LMStudioGenerator(base_url=lmstudio_url)
         self.comfyui_generator = ComfyUIGenerator(base_url=comfyui_url, output_dir=output_dir)
