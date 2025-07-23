@@ -3,7 +3,7 @@ venv/
 .venv/
 ENV/
 env/
-imagenes_IA/*
+imagenes_IA/
 *.pyc
 pycache/
 

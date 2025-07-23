@@ -9,7 +9,7 @@ import torch
 
 # Suprimir advertencias molestas
 warnings.filterwarnings("ignore", category=UserWarning)
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 
 try:
     from diffusers import StableDiffusionPipeline
@@ -101,7 +101,8 @@ class ImageGeneratorAI:
                 torch_dtype=torch_dtype,
                 use_safetensors=True,
                 safety_checker=None,
-                requires_safety_checker=False
+                requires_safety_checker=False,
+
             )
             
             print("   🔄 Moviendo modelo al dispositivo...")
