@@ -5,6 +5,17 @@ import json
 import time
 import re
 from datetime import datetime, timedelta
+import streamlit as st
+from app.rag.rag_chain import generate_scientific_content
+import os
+try:
+    from langsmith import LangSmithCallbackHandler
+except ImportError:
+    try:
+        from langchain.callbacks.tracers.langsmith import LangSmithCallbackHandler
+    except ImportError:
+        LangSmithCallbackHandler = None
+
 
 # Configuración de página
 st.set_page_config(
@@ -922,6 +933,19 @@ with st.sidebar:
     
     if st.session_state.content_generator.unsplash_configured:
         st.info("📸 Unsplash: 50 descargas/hora gratis")
+    
+    # Sección de Generador Científico (RAG)
+    st.markdown("### 🧬 Generador Científico (RAG)")
+    scientific_query = st.text_input(
+        "🔬 Tema científico (ej: física cuántica, IA, biomedicina)",
+        help="Genera contenido científico divulgativo usando RAG y arXiv"
+    )
+    if st.button("Generar contenido científico", key="generate_scientific"):
+        with st.spinner("Generando contenido científico..."):
+            langsmith_key = os.getenv("LANGSMITH_API_KEY")
+            handler = LangSmithCallbackHandler(api_key=langsmith_key) if langsmith_key else None
+            scientific_result = generate_scientific_content(scientific_query, callbacks=[handler] if handler else None)
+            st.session_state.scientific_content = scientific_result
 
 # Layout principal
 col1, col2 = st.columns([2, 1])
@@ -1265,6 +1289,12 @@ if st.session_state.generated_content:
             - **Resolución:** {image_data.get('width', 'N/A')} x {image_data.get('height', 'N/A')}
             - **URL:** [Ver en Unsplash]({image_data['author_url']})
             """)
+
+# Mostrar contenido científico generado
+if st.session_state.get('scientific_content'):
+    st.markdown("---")
+    st.markdown("### 🧬 Contenido Científico Generado (RAG)")
+    st.markdown(f"<div class='generated-content'><h4>🔬 {scientific_query}</h4><div style='background: white; padding: 1.5rem; border-radius: 8px; margin: 1rem 0;'>{st.session_state.scientific_content.replace(chr(10), '<br>')}</div><small>✨ Generado con RAG, LangChain y LangSmith</small></div>", unsafe_allow_html=True)
 
 # Footer con información mejorada
 st.markdown("---")

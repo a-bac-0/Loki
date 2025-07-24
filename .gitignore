@@ -3,60 +3,66 @@ venv/
 .venv/
 ENV/
 env/
-imagenes_IA/
+__pycache__/
 *.pyc
 pycache/
 
-Archivos de configuración local
+# Imagenes IA
+imagenes_IA/
+
+# Environment variables and secrets
 .env
 *.env
 config/settings_local.yaml
 
-Logs y archivos temporales
+# Logs and temp files
 *.log
 *.tmp
 *.bak
 *.swp
+
+# OS files
 .DS_Store
 Thumbs.db
 
-Archivos generados por Streamlit
+# Streamlit and notebook artifacts
 .streamlit/
 .frontend_cache/
-pycache/
-cache/
+.ipynb_checkpoints/
 
-Archivos generados por Jupyter/VSCode
-.ipynb_checkpoints
+# VSCode
 .vscode/
 
-Docker
+# Docker
 *.pid
 *.sock
 *.tar
 docker-compose.override.yml
 
-Archivos de datos generados
+# Data outputs
 /data/output/
 data/output/
 output/
 *.db
 *.sqlite3
 
-Imágenes generadas (si no quieres trackearlas)
+# Generated images
 images_generated/
 *.png
 *.jpg
 *.jpeg
 *.gif
 
-Modelos locales grandes (ej. Ollama, HuggingFace)
+# Large local models
 models/
 llm_weights/
 *.bin
 
-Otros directorios comunes
+# Build artifacts
+cache/
 dist/
 build/
 .eggs/
 *.egg-info/
+
+# Other common ignores
