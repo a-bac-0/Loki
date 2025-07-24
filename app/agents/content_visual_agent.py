@@ -15,7 +15,7 @@ class ContentVisualAgent:
     def __init__(self, 
                 lmstudio_url="http://127.0.0.1:1234", 
                 comfyui_url="http://127.0.0.1:8000",
-                workflow_file = os.path.join(os.path.dirname(__file__), "..", "..","data", "examples", "flujo-imagen-post.json"),
+                workflow_file = os.path.join(os.path.dirname(__file__), "..", "..",'data', "examples", "flujo-imagen-post.json"),
                 output_dir="images_generated"):
         """Inicializa el agente de contenido visual
         
@@ -26,16 +26,41 @@ class ContentVisualAgent:
             output_dir (str): Directorio donde se guardarán las imágenes generadas
         """
 
-        print(f"Inicializando ContentVisualAgent con flujo de trabajo: {workflow_file}")
+        print("\n" + "="*80)
+        print(f"INICIALIZANDO CONTENT VISUAL AGENT")
+        print(f"LM Studio URL: {lmstudio_url}")
+        print(f"ComfyUI URL: {comfyui_url}")
+        print(f"Workflow file: {workflow_file}")
+        print(f"Output dir: {output_dir}")
+        print("="*80)
+        
         self.lmstudio_generator = LMStudioGenerator(base_url=lmstudio_url)
         self.comfyui_generator = ComfyUIGenerator(base_url=comfyui_url, output_dir=output_dir)
         self.workflow_file = workflow_file
         self.workflow_data = None
         
         # Cargar el flujo de trabajo si se proporciona
-        if workflow_file and os.path.exists(workflow_file):
-            print(f"Cargando flujo de trabajo desde: {workflow_file}")
-            self.load_workflow(workflow_file)
+        if workflow_file:
+            if os.path.exists(workflow_file):
+                print(f"✅ Archivo de flujo de trabajo encontrado: {workflow_file}")
+                try:
+                    print(f"Cargando flujo de trabajo...")
+                    success = self.load_workflow(workflow_file)
+                    if success:
+                        print(f"✅ Flujo de trabajo cargado correctamente")
+                        print(f"Tipo de workflow_data: {type(self.workflow_data)}")
+                        if isinstance(self.workflow_data, dict) and "nodes" in self.workflow_data:
+                            print(f"Número de nodos: {len(self.workflow_data['nodes'])}")
+                    else:
+                        print(f"❌ Error al cargar el flujo de trabajo")
+                except Exception as e:
+                    print(f"❌ Excepción al cargar el flujo de trabajo: {str(e)}")
+                    import traceback
+                    print(f"Traceback: {traceback.format_exc()}")
+            else:
+                print(f"❌ Archivo de flujo de trabajo no encontrado: {workflow_file}")
+        else:
+            print(f"⚠️ No se proporcionó archivo de flujo de trabajo")
     
     def load_workflow(self, workflow_file):
         """Carga un flujo de trabajo de ComfyUI desde un archivo JSON
@@ -46,12 +71,53 @@ class ContentVisualAgent:
         Returns:
             bool: True si se cargó correctamente, False en caso contrario
         """
+        print(f"\nCargando flujo de trabajo desde: {workflow_file}")
+        
+        if not os.path.exists(workflow_file):
+            print(f"❌ ERROR: El archivo de flujo de trabajo no existe: {workflow_file}")
+            return False
+            
         try:
-            self.workflow_data = self.comfyui_generator.load_workflow(workflow_file)
+            print(f"Llamando a comfyui_generator.load_workflow...")
+            workflow_data = self.comfyui_generator.load_workflow(workflow_file)
+            
+            print(f"Flujo de trabajo cargado. Tipo: {type(workflow_data)}")
+            
+            # Validar el formato del workflow_data
+            if isinstance(workflow_data, dict):
+                print(f"✅ workflow_data es un diccionario")
+                if "nodes" in workflow_data:
+                    print(f"✅ workflow_data contiene la clave 'nodes'")
+                    print(f"Número de nodos: {len(workflow_data['nodes'])}")
+                else:
+                    print(f"⚠️ workflow_data no contiene la clave 'nodes'")
+                    print(f"Claves disponibles: {list(workflow_data.keys())}")
+            elif isinstance(workflow_data, list):
+                print(f"⚠️ workflow_data es una lista, no un diccionario")
+                print(f"Longitud de la lista: {len(workflow_data)}")
+                if len(workflow_data) > 0:
+                    print(f"Primer elemento tipo: {type(workflow_data[0])}")
+                    
+                    # Si es una lista con un solo elemento y ese elemento es un diccionario, usar ese elemento
+                    if len(workflow_data) == 1 and isinstance(workflow_data[0], dict):
+                        print(f"Corrigiendo workflow_data: usando el primer elemento de la lista")
+                        workflow_data = workflow_data[0]
+                        print(f"Nuevo tipo de workflow_data: {type(workflow_data)}")
+                        if "nodes" in workflow_data:
+                            print(f"✅ workflow_data corregido contiene la clave 'nodes'")
+                            print(f"Número de nodos: {len(workflow_data['nodes'])}")
+            else:
+                print(f"❌ workflow_data no es ni un diccionario ni una lista, es {type(workflow_data)}")
+                
+            self.workflow_data = workflow_data
             self.workflow_file = workflow_file
             return True
+            
         except Exception as e:
-            print(f"Error al cargar el flujo de trabajo: {str(e)}")
+            print(f"❌ ERROR al cargar el flujo de trabajo: {str(e)}")
+            print(f"Tipo de error: {type(e).__name__}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
             return False
     
     def check_services(self) -> Dict[str, bool]:
@@ -108,20 +174,74 @@ class ContentVisualAgent:
         Returns:
             Tuple[Optional[Dict[str, Any]], str]: (datos de la imagen generada, mensaje de estado)
         """
+        print("\n" + "-"*80)
+        print(f"GENERANDO IMAGEN CON COMFYUI")
+        print(f"Prompt: {prompt[:100]}...")
+        print(f"Workflow file disponible: {'Sí' if self.workflow_file else 'No'}")
+        print(f"Workflow data disponible: {'Sí' if self.workflow_data else 'No'}")
+        
+        if self.workflow_data:
+            print(f"Tipo de workflow_data: {type(self.workflow_data)}")
+            if isinstance(self.workflow_data, list):
+                print(f"ADVERTENCIA: workflow_data es una lista, no un diccionario")
+                print(f"Longitud de la lista: {len(self.workflow_data)}")
+                print(f"Primeros elementos: {self.workflow_data[:3] if len(self.workflow_data) > 0 else 'Lista vacía'}")
+                
+                # Intentar corregir el problema si es una lista con un solo elemento diccionario
+                if len(self.workflow_data) == 1 and isinstance(self.workflow_data[0], dict):
+                    print(f"Corrigiendo workflow_data: usando el primer elemento de la lista")
+                    self.workflow_data = self.workflow_data[0]
+                    print(f"Nuevo tipo de workflow_data: {type(self.workflow_data)}")
+        print("-"*80)
+        
         try:
             if not self.workflow_data and not self.workflow_file:
+                print("❌ No se ha cargado un flujo de trabajo de ComfyUI")
                 return None, "No se ha cargado un flujo de trabajo de ComfyUI"
             
+            # Verificar y preparar workflow_data si existe
+            workflow_data_to_use = None
+            if self.workflow_data:
+                if isinstance(self.workflow_data, dict):
+                    print("✅ Usando workflow_data (diccionario)")
+                    workflow_data_to_use = self.workflow_data
+                elif isinstance(self.workflow_data, list) and len(self.workflow_data) > 0:
+                    print(f"⚠️ workflow_data es una lista, intentando usar el primer elemento")
+                    if isinstance(self.workflow_data[0], dict):
+                        print("✅ Usando primer elemento de la lista como workflow_data")
+                        workflow_data_to_use = self.workflow_data[0]
+                    else:
+                        print(f"❌ El primer elemento de la lista no es un diccionario, es {type(self.workflow_data[0])}")
+                else:
+                    print(f"❌ workflow_data no es utilizable: {type(self.workflow_data)}")
+            
+            # Verificar workflow_file si existe
+            workflow_file_to_use = None
+            if self.workflow_file and os.path.exists(self.workflow_file):
+                print(f"✅ Usando workflow_file: {self.workflow_file}")
+                workflow_file_to_use = self.workflow_file
+            elif self.workflow_file:
+                print(f"❌ El archivo workflow_file no existe: {self.workflow_file}")
+            
             # Pasar tanto workflow_data como workflow_file para mayor robustez
+            print("Llamando a comfyui_generator.generate_image...")
             image_data = self.comfyui_generator.generate_image(
                 prompt=prompt,
-                workflow_data=self.workflow_data,
-                workflow_file=self.workflow_file
+                workflow_data=workflow_data_to_use,
+                workflow_file=workflow_file_to_use
             )
+            
+            print(f"✅ Imagen generada correctamente")
+            if image_data and "local_path" in image_data:
+                print(f"Ruta de la imagen: {image_data['local_path']}")
             
             return image_data, "Imagen generada correctamente"
             
         except Exception as e:
+            print(f"❌ ERROR en generate_image: {str(e)}")
+            print(f"Tipo de error: {type(e).__name__}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
             return None, f"Error al generar la imagen: {str(e)}"
     
     def generate_complete_content(self, 
