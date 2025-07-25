@@ -5,9 +5,11 @@ import json
 import time
 import re
 from datetime import datetime, timedelta
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import streamlit as st
 from app.rag.rag_chain import generate_scientific_content
-import os
 try:
     from langsmith import LangSmithCallbackHandler
 except ImportError:
@@ -942,9 +944,7 @@ with st.sidebar:
     )
     if st.button("Generar contenido científico", key="generate_scientific"):
         with st.spinner("Generando contenido científico..."):
-            langsmith_key = os.getenv("LANGSMITH_API_KEY")
-            handler = LangSmithCallbackHandler(api_key=langsmith_key) if langsmith_key else None
-            scientific_result = generate_scientific_content(scientific_query, callbacks=[handler] if handler else None)
+            scientific_result = generate_scientific_content(scientific_query)
             st.session_state.scientific_content = scientific_result
 
 # Layout principal

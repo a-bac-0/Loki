@@ -29,4 +29,7 @@ scikit-learn
 pandas
 torch
 
+# For arXiv ingestion
+arxiv
+
 # If you use LM Studio, ComfyUI, or other local models, add their dependencies as needed
