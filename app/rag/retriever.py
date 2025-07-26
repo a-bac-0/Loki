@@ -1,5 +1,6 @@
-from langchain.vectorstores import Chroma
 from langchain.embeddings import SentenceTransformerEmbeddings
+from langchain.vectorstores import Chroma
+
 
 def retrieve(query):
     embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")

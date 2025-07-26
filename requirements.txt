@@ -14,15 +14,13 @@ pillow
 requests
 python-dotenv
 PyYAML
+pyyaml
+deep-translator
+langdetect
+dotenv
 
 # Dev and utility
-pytest
-pytest-cov
-flake8
-black
-isort
-mypy
-pre-commit
+
 
 # Optional: for image generation and scientific RAG
 scikit-learn

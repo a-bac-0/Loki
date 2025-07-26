@@ -1,24 +1,26 @@
 # app/generators/lmstudio_generator.py
-import requests
 import json
 import time
-from typing import Dict, List, Tuple, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
+
+import requests
+
 
 class LMStudioGenerator:
     """Clase para interactuar con LM Studio para generar texto y prompts visuales"""
-    
+
     def __init__(self, base_url="http://127.0.0.1:1234"):
         """Inicializa el generador de LM Studio
-        
+
         Args:
             base_url (str): URL base de la API de LM Studio
         """
         self.base_url = base_url
         self.api_endpoint = f"{base_url}/v1/chat/completions"
-    
+
     def check_server_status(self) -> bool:
         """Verifica si el servidor de LM Studio está en funcionamiento
-        
+
         Returns:
             bool: True si el servidor está activo, False en caso contrario
         """
@@ -27,33 +29,34 @@ class LMStudioGenerator:
             return response.status_code == 200
         except requests.exceptions.RequestException:
             return False
-    
-    def generate_content(self, 
-                        topic: str, 
-                        platform: str, 
-                        audience: str, 
-                        tone: str = "profesional") -> Tuple[Optional[str], str]:
+
+    def generate_content(
+        self, topic: str, platform: str, audience: str, tone: str = "profesional"
+    ) -> Tuple[Optional[str], str]:
         """Genera contenido para una plataforma específica
-        
+
         Args:
             topic (str): Tema sobre el que generar contenido
             platform (str): Plataforma para la que optimizar el contenido
             audience (str): Audiencia objetivo
             tone (str): Tono del contenido
-            
+
         Returns:
             Tuple[Optional[str], str]: (contenido generado, mensaje de estado)
         """
         if not self.check_server_status():
-            return None, "LM Studio no está disponible. Asegúrate de que esté ejecutándose en http://127.0.0.1:1234"
-        
+            return (
+                None,
+                "LM Studio no está disponible. Asegúrate de que esté ejecutándose en http://127.0.0.1:1234",
+            )
+
         platform_instructions = {
             "twitter": "Crea un tweet atractivo y conciso (máximo 280 caracteres)",
             "blog": "Crea una introducción engaging para un artículo de blog",
             "instagram": "Crea un post visual para Instagram con emojis y hashtags",
-            "linkedin": "Crea un post profesional para LinkedIn"
+            "linkedin": "Crea un post profesional para LinkedIn",
         }
-        
+
         system_prompt = f"""
         Eres un experto en marketing de contenidos y redes sociales.
         
@@ -73,53 +76,54 @@ class LMStudioGenerator:
         
         Responde SOLO con el contenido final, sin explicaciones adicionales.
         """
-        
+
         try:
             payload = {
                 "messages": [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Crea contenido sobre: {topic}"}
+                    {"role": "user", "content": f"Crea contenido sobre: {topic}"},
                 ],
                 "temperature": 0.7,
                 "max_tokens": 500,
-                "stream": False
+                "stream": False,
             }
-            
-            response = requests.post(
-                self.api_endpoint,
-                json=payload,
-                timeout=30
-            )
-            
+
+            response = requests.post(self.api_endpoint, json=payload, timeout=30)
+
             if response.status_code == 200:
                 result = response.json()
                 content = result["choices"][0]["message"]["content"].strip()
                 return content, "Contenido generado con LM Studio (Gemma 3)"
             else:
-                return None, f"Error en API de LM Studio: {response.status_code} - {response.text}"
-                
+                return (
+                    None,
+                    f"Error en API de LM Studio: {response.status_code} - {response.text}",
+                )
+
         except requests.exceptions.Timeout:
             return None, "Timeout conectando con LM Studio"
         except Exception as e:
             return None, f"Error con LM Studio: {str(e)}"
-    
-    def generate_image_prompt(self, 
-                             content: str, 
-                             topic: str, 
-                             style: str = "realistic") -> Tuple[Optional[str], str]:
+
+    def generate_image_prompt(
+        self, content: str, topic: str, style: str = "realistic"
+    ) -> Tuple[Optional[str], str]:
         """Genera un prompt optimizado para la generación de imágenes
-        
+
         Args:
             content (str): Contenido de texto generado
             topic (str): Tema principal
             style (str): Estilo visual deseado
-            
+
         Returns:
             Tuple[Optional[str], str]: (prompt para imagen, mensaje de estado)
         """
         if not self.check_server_status():
-            return None, "LM Studio no está disponible. Asegúrate de que esté ejecutándose en http://127.0.0.1:1234"
-        
+            return (
+                None,
+                "LM Studio no está disponible. Asegúrate de que esté ejecutándose en http://127.0.0.1:1234",
+            )
+
         system_prompt = f"""
         Eres un experto en crear prompts para modelos de generación de imágenes como Stable Diffusion.
         
@@ -136,51 +140,56 @@ class LMStudioGenerator:
         
         Responde SOLO con el prompt para la imagen, sin explicaciones adicionales.
         """
-        
+
         try:
             payload = {
                 "messages": [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Contenido: {content}\n\nTema principal: {topic}\n\nCrea un prompt visual detallado para generar una imagen que acompañe este contenido."}
+                    {
+                        "role": "user",
+                        "content": f"Contenido: {content}\n\nTema principal: {topic}\n\nCrea un prompt visual detallado para generar una imagen que acompañe este contenido.",
+                    },
                 ],
                 "temperature": 0.7,
                 "max_tokens": 300,
-                "stream": False
+                "stream": False,
             }
-            
-            response = requests.post(
-                self.api_endpoint,
-                json=payload,
-                timeout=30
-            )
-            
+
+            response = requests.post(self.api_endpoint, json=payload, timeout=30)
+
             if response.status_code == 200:
                 result = response.json()
                 prompt = result["choices"][0]["message"]["content"].strip()
                 return prompt, "Prompt visual generado con LM Studio (Gemma 3)"
             else:
-                return None, f"Error en API de LM Studio: {response.status_code} - {response.text}"
-                
+                return (
+                    None,
+                    f"Error en API de LM Studio: {response.status_code} - {response.text}",
+                )
+
         except requests.exceptions.Timeout:
             return None, "Timeout conectando con LM Studio"
         except Exception as e:
             return None, f"Error con LM Studio: {str(e)}"
-    
-    def analyze_content_for_keywords(self, 
-                                    content: str, 
-                                    topic: str) -> Tuple[Optional[List[str]], str]:
+
+    def analyze_content_for_keywords(
+        self, content: str, topic: str
+    ) -> Tuple[Optional[List[str]], str]:
         """Analiza el contenido para extraer palabras clave relevantes
-        
+
         Args:
             content (str): Contenido de texto generado
             topic (str): Tema principal
-            
+
         Returns:
             Tuple[Optional[List[str]], str]: (lista de palabras clave, mensaje de estado)
         """
         if not self.check_server_status():
-            return None, "LM Studio no está disponible. Asegúrate de que esté ejecutándose en http://127.0.0.1:1234"
-        
+            return (
+                None,
+                "LM Studio no está disponible. Asegúrate de que esté ejecutándose en http://127.0.0.1:1234",
+            )
+
         system_prompt = f"""
         Eres un experto en análisis de contenido y extracción de palabras clave.
         
@@ -192,32 +201,34 @@ class LMStudioGenerator:
         
         Responde SOLO con las 5 palabras clave separadas por comas, sin explicaciones adicionales.
         """
-        
+
         try:
             payload = {
                 "messages": [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Contenido: {content}\n\nTema principal: {topic}\n\nExtrae exactamente 5 palabras clave o frases cortas que representen los conceptos visuales más importantes."}
+                    {
+                        "role": "user",
+                        "content": f"Contenido: {content}\n\nTema principal: {topic}\n\nExtrae exactamente 5 palabras clave o frases cortas que representen los conceptos visuales más importantes.",
+                    },
                 ],
                 "temperature": 0.3,
                 "max_tokens": 100,
-                "stream": False
+                "stream": False,
             }
-            
-            response = requests.post(
-                self.api_endpoint,
-                json=payload,
-                timeout=30
-            )
-            
+
+            response = requests.post(self.api_endpoint, json=payload, timeout=30)
+
             if response.status_code == 200:
                 result = response.json()
                 keywords_text = result["choices"][0]["message"]["content"].strip()
                 keywords = [kw.strip() for kw in keywords_text.split(",") if kw.strip()]
                 return keywords, "Palabras clave extraídas con LM Studio (Gemma 3)"
             else:
-                return None, f"Error en API de LM Studio: {response.status_code} - {response.text}"
-                
+                return (
+                    None,
+                    f"Error en API de LM Studio: {response.status_code} - {response.text}",
+                )
+
         except requests.exceptions.Timeout:
             return None, "Timeout conectando con LM Studio"
         except Exception as e:

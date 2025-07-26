@@ -1,7 +1,7 @@
-from PIL import Image, ImageEnhance, ImageFilter
 import os
 import sys
 
+from PIL import Image, ImageEnhance, ImageFilter
 
 
 def postprocess_image(image_path, output_dir=None):
@@ -10,41 +10,40 @@ def postprocess_image(image_path, output_dir=None):
     if output_dir is None:
         output_dir = os.path.dirname(image_path)
 
-
     # Tabla de dimensiones por red social y tipo
     SIZES = {
-        'instagram': {
-            'cuadrada': (1080, 1080),
-            'horizontal': (1080, 566),
-            'vertical': (1080, 1350),
-            'historias': (1080, 1920),
-            'perfil': (320, 320),
+        "instagram": {
+            "cuadrada": (1080, 1080),
+            "horizontal": (1080, 566),
+            "vertical": (1080, 1350),
+            "historias": (1080, 1920),
+            "perfil": (320, 320),
         },
-        'facebook': {
-            'perfil': (320, 320),
-            'portada': (820, 312),
-            'cuadrada': (1200, 1200),
-            'horizontal': (1200, 630),
-            'historias': (1080, 1920),
+        "facebook": {
+            "perfil": (320, 320),
+            "portada": (820, 312),
+            "cuadrada": (1200, 1200),
+            "horizontal": (1200, 630),
+            "historias": (1080, 1920),
         },
-        'twitter': {
-            'perfil': (400, 400),
-            'cabecera': (1500, 500),
-            'post': (1200, 675),
+        "twitter": {
+            "perfil": (400, 400),
+            "cabecera": (1500, 500),
+            "post": (1200, 675),
         },
-        'linkedin': {
-            'perfil': (400, 400),
-            'fondo': (1584, 396),
-            'publicacion': (1200, 627),
+        "linkedin": {
+            "perfil": (400, 400),
+            "fondo": (1584, 396),
+            "publicacion": (1200, 627),
         },
-        'tiktok': {
-            'perfil': (200, 200),
-            'historias': (1080, 1920),
+        "tiktok": {
+            "perfil": (200, 200),
+            "historias": (1080, 1920),
         },
-        'youtube': {
-            'perfil': (800, 800),
-            'banner': (2560, 1440),
-            'miniatura': (1280, 720),
+        "youtube": {
+            "perfil": (800, 800),
+            "banner": (2560, 1440),
+            "miniatura": (1280, 720),
         },
     }
 
