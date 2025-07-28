@@ -1,0 +1,8 @@
+# Documentos subidos por usuarios
+*.pdf
+*.txt
+*.docx
+*.doc
+
+# Mantener la carpeta pero ignorar el contenido
+!.gitkeep

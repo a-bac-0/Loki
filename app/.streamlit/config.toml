@@ -1,0 +1,27 @@
+[server]
+# Configuración para evitar conflictos con PyTorch
+fileWatcherType = "none"
+runOnSave = false
+allowRunOnSave = false
+
+[global]
+# Desactivar métricas y telemetría
+disableWatchdogWarning = true
+showWarningOnDirectExecution = false
+
+[theme]
+# Tema opcional (puedes cambiarlo)
+primaryColor = "#FF6B6B"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F0F2F6"
+textColor = "#262730"
+
+[browser]
+# Configuración del navegador
+gatherUsageStats = false
+serverAddress = "localhost"
+
+[logger]
+# Configuración de logging
+level = "error"
+messageFormat = "%(asctime)s.%(msecs)03d %(name)s: %(levelname)s: %(message)s"
