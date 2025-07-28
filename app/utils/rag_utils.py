@@ -1,271 +1,271 @@
-# app/utils/rag_utils.py
+# utils/rag_utils.py
 
-import streamlit as st
-import tempfile
 import os
+import requests
+from typing import List, Optional, Dict, Any
 from langchain_ollama import OllamaEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import PyPDFLoader, TextLoader, UnstructuredWordDocumentLoader
 from langchain.schema import Document
+from langchain_community.vectorstores import FAISS
+import tempfile
 
-@st.cache_resource
-def get_embeddings_model(ollama_url="http://localhost:11434"):
-    """Inicializa el modelo de embeddings de Ollama"""
-    try:
-        return OllamaEmbeddings(
-            base_url=ollama_url,
-            model="nomic-embed-text"  # Modelo recomendado para embeddings
-        )
-    except:
-        # Fallback a un modelo más común
-        return OllamaEmbeddings(
-            base_url=ollama_url,
-            model="llama3.2"
-        )
-
-def process_uploaded_file(uploaded_file, save_to_docs=True):
-    """Procesa archivos subidos y extrae el texto
-    
-    Args:
-        uploaded_file: Archivo subido por Streamlit
-        save_to_docs: Si True, guarda el archivo en app/docs permanentemente
+def get_embeddings_model():
+    """
+    Obtiene el modelo de embeddings configurado.
     """
     try:
-        if save_to_docs:
-            # Guardar archivo en la carpeta docs
-            import os
-            from datetime import datetime
+        # Verificar qué modelos están disponibles
+        response = requests.get("http://localhost:11434/api/tags", timeout=5)
+        if response.status_code == 200:
+            available_models = response.json()
+            model_names = [model['name'] for model in available_models.get('models', [])]
             
-            # Crear nombre único con timestamp para evitar conflictos
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            original_name = uploaded_file.name
-            name_without_ext = os.path.splitext(original_name)[0]
-            file_extension = os.path.splitext(original_name)[1]
+            # Lista de modelos de embeddings preferidos (en orden de preferencia)
+            preferred_embedding_models = [
+                'nomic-embed-text',
+                'nomic-embed-text:latest',
+                'all-minilm',
+                'all-minilm:latest',
+                'llama2',  # Fallback
+                'llama3',  # Fallback
+            ]
             
-            # Crear nombre único: nombre_original_timestamp.extension
-            unique_filename = f"{name_without_ext}_{timestamp}{file_extension}"
+            # Buscar el primer modelo disponible
+            selected_model = None
+            for model in preferred_embedding_models:
+                if model in model_names or f"{model}:latest" in model_names:
+                    selected_model = model
+                    break
             
-            # Ruta completa donde guardar el archivo
-            current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # Volver al directorio app
-            docs_dir = os.path.join(current_dir, "docs")
+            if not selected_model:
+                # Si no hay modelos específicos de embeddings, usar el primer disponible
+                selected_model = model_names[0] if model_names else 'llama2'
             
-            # Crear carpeta docs si no existe
-            os.makedirs(docs_dir, exist_ok=True)
+            print(f"✅ Usando modelo de embeddings: {selected_model}")
             
-            # Guardar archivo permanentemente
-            file_path = os.path.join(docs_dir, unique_filename)
-            with open(file_path, "wb") as f:
-                f.write(uploaded_file.getvalue())
-            
-            # Usar la ruta permanente
-            tmp_file_path = file_path
-            
-            # Notificar al usuario
-            st.success(f"📁 Archivo guardado como: `{unique_filename}`")
-            
+            return OllamaEmbeddings(
+                model=selected_model,
+                base_url="http://localhost:11434"
+            )
         else:
-            # Crear archivo temporal (comportamiento original)
-            with tempfile.NamedTemporaryFile(delete=False, suffix=f".{uploaded_file.name.split('.')[-1]}") as tmp_file:
-                tmp_file.write(uploaded_file.getvalue())
-                tmp_file_path = tmp_file.name
+            print("⚠️ No se pudo conectar con Ollama, usando modelo por defecto")
+            return OllamaEmbeddings(
+                model="llama2",
+                base_url="http://localhost:11434"
+            )
+            
+    except Exception as e:
+        print(f"⚠️ Error obteniendo modelo de embeddings: {e}")
+        print("Usando modelo por defecto: llama2")
+        return OllamaEmbeddings(
+            model="llama2",
+            base_url="http://localhost:11434"
+        )
+
+def process_uploaded_file(uploaded_file) -> List[Document]:
+    """
+    Procesa un archivo subido y lo convierte en chunks de documentos.
+    """
+    try:
+        # Crear archivo temporal
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{uploaded_file.name.split('.')[-1]}") as tmp_file:
+            tmp_file.write(uploaded_file.getvalue())
+            tmp_file_path = tmp_file.name
         
         # Cargar documento según el tipo
         file_extension = uploaded_file.name.split('.')[-1].lower()
         
         if file_extension == 'pdf':
-            try:
-                # Intentar importar pypdf primero
-                import pypdf
-                loader = PyPDFLoader(tmp_file_path)
-            except ImportError:
-                st.error("❌ pypdf no está instalado. Ejecuta: pip install pypdf")
-                return []
+            loader = PyPDFLoader(tmp_file_path)
         elif file_extension == 'txt':
             loader = TextLoader(tmp_file_path, encoding='utf-8')
         elif file_extension in ['docx', 'doc']:
-            try:
-                loader = UnstructuredWordDocumentLoader(tmp_file_path)
-            except ImportError:
-                st.error("❌ unstructured no está instalado. Ejecuta: pip install unstructured")
-                return []
+            loader = UnstructuredWordDocumentLoader(tmp_file_path)
         else:
-            # Para otros tipos, intentar como texto plano
-            content = uploaded_file.getvalue().decode('utf-8', errors='ignore')
-            return [Document(page_content=content, metadata={"source": uploaded_file.name})]
+            raise ValueError(f"Tipo de archivo no soportado: {file_extension}")
         
+        # Cargar documento
         documents = loader.load()
         
-        # Actualizar metadata con información del archivo
+        # Agregar metadatos
         for doc in documents:
-            if save_to_docs:
-                doc.metadata.update({
-                    "source": unique_filename,  # Usar el nombre único si se guardó
-                    "original_name": original_name,
-                    "file_path": tmp_file_path if save_to_docs else None
-                })
-            else:
-                doc.metadata.update({
-                    "source": uploaded_file.name
-                })
+            doc.metadata.update({
+                'filename': uploaded_file.name,
+                'file_type': file_extension
+            })
         
-        # Limpiar archivo temporal solo si no se guardó permanentemente
-        if not save_to_docs:
-            try:
-                os.unlink(tmp_file_path)
-            except:
-                pass  # Ignorar errores al limpiar temporales
+        # Dividir en chunks
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=200,
+            length_function=len,
+        )
         
-        return documents
+        chunks = text_splitter.split_documents(documents)
+        
+        # Limpiar archivo temporal
+        os.unlink(tmp_file_path)
+        
+        print(f"✅ Archivo procesado: {len(chunks)} chunks generados")
+        return chunks
         
     except Exception as e:
-        st.error(f"Error procesando archivo {uploaded_file.name}: {str(e)}")
-        # Mostrar comando específico según el tipo de archivo
-        if uploaded_file.name.lower().endswith('.pdf'):
-            st.code("pip install pypdf")
-        elif uploaded_file.name.lower().endswith(('.docx', '.doc')):
-            st.code("pip install unstructured python-docx")
+        print(f"❌ Error procesando archivo: {e}")
+        # Limpiar archivo temporal si existe
+        try:
+            os.unlink(tmp_file_path)
+        except:
+            pass
         return []
 
-def create_vector_store(documents, embeddings):
-    """Crea un vector store a partir de documentos"""
-    if not documents:
-        return None
-    
-    # Dividir documentos en chunks más pequeños
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200,
-        length_function=len
-    )
-    
-    splits = text_splitter.split_documents(documents)
-    
-    # Crear vector store con FAISS
-    vectorstore = FAISS.from_documents(splits, embeddings)
-    
-    return vectorstore
-
-def search_documents(query, vectorstore, k=3):
-    """Busca documentos relevantes usando similaridad semántica"""
-    if not vectorstore:
-        return []
-    
+def create_vector_store(chunks: List[Document]):
+    """
+    Crea un vector store a partir de los chunks de documentos.
+    """
     try:
-        relevant_docs = vectorstore.similarity_search(query, k=k)
-        return relevant_docs
+        if not chunks:
+            print("⚠️ No hay chunks para procesar")
+            return None
+        
+        # Obtener modelo de embeddings
+        embeddings = get_embeddings_model()
+        
+        # Extraer textos y metadatos
+        texts = [doc.page_content for doc in chunks]
+        metadatas = [doc.metadata for doc in chunks]
+        
+        # Crear vector store
+        vector_store = FAISS.from_texts(
+            texts=texts,
+            embedding=embeddings,
+            metadatas=metadatas
+        )
+        
+        print(f"✅ Vector store creado con {len(texts)} documentos")
+        return vector_store
+        
     except Exception as e:
-        st.error(f"Error en búsqueda: {str(e)}")
+        print(f"❌ Error creando vector store: {e}")
+        return None
+
+def search_documents(vector_store, query: str, k: int = 3) -> List[Document]:
+    """
+    Busca documentos relevantes en el vector store.
+    """
+    try:
+        # Verificar que vector_store es un objeto FAISS válido
+        if vector_store is None:
+            print("⚠️ Vector store no está inicializado")
+            return []
+        
+        if isinstance(vector_store, str):
+            print("❌ Error: se pasó un string en lugar de un vector store")
+            return []
+        
+        # Realizar búsqueda por similitud
+        relevant_docs = vector_store.similarity_search(
+            query=query,
+            k=k
+        )
+        
+        print(f"✅ Encontrados {len(relevant_docs)} documentos relevantes")
+        return relevant_docs
+        
+    except Exception as e:
+        print(f"❌ Error en búsqueda: {e}")
         return []
 
-def format_context(relevant_docs):
-    """Formatea documentos relevantes como contexto"""
+def format_context(relevant_docs: List[Document]) -> str:
+    """
+    Formatea los documentos relevantes en un contexto para el LLM.
+    """
     if not relevant_docs:
         return ""
     
     context_parts = []
     for i, doc in enumerate(relevant_docs, 1):
-        source = doc.metadata.get('source', 'Documento desconocido')
         content = doc.page_content.strip()
-        context_parts.append(f"Fuente {i} ({source}):\n{content}")
+        filename = doc.metadata.get('filename', 'Documento desconocido')
+        
+        context_parts.append(f"Documento {i} ({filename}):\n{content}")
     
     return "\n\n".join(context_parts)
 
-def get_saved_documents():
-    """Obtiene la lista de documentos guardados en app/docs"""
-    import os
-    import glob
-    from datetime import datetime
-    
+def get_saved_documents() -> List[Dict]:
+    """
+    Obtiene la lista de documentos guardados en la carpeta docs.
+    """
     try:
-        # Obtener ruta de la carpeta docs
-        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        docs_dir = os.path.join(current_dir, "docs")
+        docs_dir = os.path.join(os.path.dirname(__file__), "..", "docs")
         
         if not os.path.exists(docs_dir):
+            os.makedirs(docs_dir)
             return []
         
-        # Buscar todos los archivos en la carpeta docs
-        supported_extensions = ['*.pdf', '*.txt', '*.docx', '*.doc']
-        all_files = []
+        documents = []
+        for filename in os.listdir(docs_dir):
+            if filename.endswith(('.pdf', '.txt', '.docx', '.doc')):
+                file_path = os.path.join(docs_dir, filename)
+                file_stat = os.stat(file_path)
+                
+                documents.append({
+                    'filename': filename,
+                    'size': file_stat.st_size,
+                    'modified': file_stat.st_mtime
+                })
         
-        for extension in supported_extensions:
-            files = glob.glob(os.path.join(docs_dir, extension))
-            all_files.extend(files)
+        return sorted(documents, key=lambda x: x['modified'], reverse=True)
         
-        # Crear lista con información de archivos
-        docs_info = []
-        for file_path in all_files:
-            filename = os.path.basename(file_path)
-            size = os.path.getsize(file_path)
-            modified_time = datetime.fromtimestamp(os.path.getmtime(file_path))
+    except Exception as e:
+        print(f"❌ Error obteniendo documentos guardados: {e}")
+        return []
+
+def load_saved_document(filename: str) -> Optional[List[Document]]:
+    """
+    Carga un documento guardado desde la carpeta docs.
+    """
+    try:
+        docs_dir = os.path.join(os.path.dirname(__file__), "..", "docs")
+        file_path = os.path.join(docs_dir, filename)
+        
+        if not os.path.exists(file_path):
+            print(f"❌ Archivo no encontrado: {filename}")
+            return None
+        
+        # Simular uploaded_file para reutilizar process_uploaded_file
+        class MockUploadedFile:
+            def __init__(self, path):
+                self.name = os.path.basename(path)
+                with open(path, 'rb') as f:
+                    self._content = f.read()
             
-            docs_info.append({
-                'filename': filename,
-                'path': file_path,
-                'size': size,
-                'modified': modified_time,
-                'size_mb': size / (1024 * 1024)
-            })
+            def getvalue(self):
+                return self._content
         
-        # Ordenar por fecha de modificación (más recientes primero)
-        docs_info.sort(key=lambda x: x['modified'], reverse=True)
-        
-        return docs_info
+        mock_file = MockUploadedFile(file_path)
+        return process_uploaded_file(mock_file)
         
     except Exception as e:
-        st.error(f"Error obteniendo documentos guardados: {str(e)}")
-        return []
+        print(f"❌ Error cargando documento guardado: {e}")
+        return None
 
-def load_saved_document(file_path):
-    """Carga un documento guardado desde app/docs"""
+def delete_saved_document(filename: str) -> bool:
+    """
+    Elimina un documento guardado de la carpeta docs.
+    """
     try:
-        file_extension = os.path.splitext(file_path)[1].lower()
+        docs_dir = os.path.join(os.path.dirname(__file__), "..", "docs")
+        file_path = os.path.join(docs_dir, filename)
         
-        if file_extension == '.pdf':
-            try:
-                import pypdf
-                loader = PyPDFLoader(file_path)
-            except ImportError:
-                st.error("❌ pypdf no está instalado. Ejecuta: pip install pypdf")
-                return []
-        elif file_extension == '.txt':
-            loader = TextLoader(file_path, encoding='utf-8')
-        elif file_extension in ['.docx', '.doc']:
-            try:
-                loader = UnstructuredWordDocumentLoader(file_path)
-            except ImportError:
-                st.error("❌ unstructured no está instalado. Ejecuta: pip install unstructured")
-                return []
-        else:
-            # Para otros tipos, intentar como texto plano
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                content = f.read()
-            return [Document(page_content=content, metadata={"source": os.path.basename(file_path)})]
-        
-        documents = loader.load()
-        
-        # Actualizar metadata con información del archivo guardado
-        for doc in documents:
-            doc.metadata.update({
-                "source": os.path.basename(file_path),
-                "file_path": file_path
-            })
-        
-        return documents
-        
-    except Exception as e:
-        st.error(f"Error cargando documento {file_path}: {str(e)}")
-        return []
-
-def delete_saved_document(file_path):
-    """Elimina un documento guardado de app/docs"""
-    try:
-        import os
         if os.path.exists(file_path):
             os.remove(file_path)
+            print(f"✅ Documento eliminado: {filename}")
             return True
-        return False
+        else:
+            print(f"⚠️ Archivo no encontrado: {filename}")
+            return False
+            
     except Exception as e:
-        st.error(f"Error eliminando archivo: {str(e)}")
+        print(f"❌ Error eliminando documento: {e}")
         return False
