@@ -1,15 +1,33 @@
-langchain
-openai
-ollama
+# Main dependencies
 streamlit
+langchain
+langsmith
+chromadb
+sentence-transformers
+ollama
+openai
+crewai
+huggingface-hub
+transformers
+diffusers
 pillow
 requests
 python-dotenv
+PyYAML
 pyyaml
+deep-translator
+langdetect
+dotenv
 
-# for creating image
-diffusers>=0.27.0
-pillow>=10.0.0
-transformers
-accelerate
-numpy
+# Dev and utility
+
+
+# Optional: for image generation and scientific RAG
+scikit-learn
+pandas
+torch
+
+# For arXiv ingestion
+arxiv
+
+# If you use LM Studio, ComfyUI, or other local models, add their dependencies as needed

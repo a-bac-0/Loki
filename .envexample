@@ -1,0 +1,7 @@
+UNSPLASH_ACCESS_KEY=your_unsplash_access_key
+GROQ_API_KEY=your_groq_api_key
+HUGGINGFACE_API_KEY=your_huggingface_api_key
+OPENAI_API_KEY=your_openai_api_key
+LANGSMITH_API_KEY=your_langsmith_api_key
+# If you use Ollama, you may need OLLAMA_API_KEY=your_ollama_api_key
+# If you use LM Studio or ComfyUI, set endpoints in config/settings.yaml

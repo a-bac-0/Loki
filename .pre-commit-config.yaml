@@ -1,0 +1,32 @@
+# .pre-commit-config.yaml
+
+repos:
+  - repo: https://github.com/psf/black
+    rev: 24.3.0  # use latest stable or pin as needed
+    hooks:
+      - id: black
+        name: Black Formatter
+        language_version: python3
+
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        name: isort Import Sorter
+        language_version: python3
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 6.0.0
+    hooks:
+      - id: flake8
+        name: flake8 Linter
+        language_version: python3
+
+  - repo: local
+    hooks:
+      - id: clean-invisible
+        name: Remove invisible unicode characters
+        entry: ./clean_invisible.py
+        language: python
+        types: [python, text, markdown, json, yaml]
+        files: .  # apply to entire repository
