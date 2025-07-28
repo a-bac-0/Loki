@@ -1,0 +1,10 @@
+# Imágenes generadas por la aplicación
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+
+# Mantener la carpeta pero ignorar el contenido
+!.gitkeep
+!README.md
