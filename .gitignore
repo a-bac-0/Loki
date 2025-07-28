@@ -1,4 +1,17 @@
+<<<<<<< HEAD
 # Archivos de entorno - NO SUBIR A GIT
+=======
+Entorno virtual
+venv/
+.venv/
+ENV/
+env/
+imagenes_IA/
+*.pyc
+pycache/
+
+Archivos de configuración local
+>>>>>>> feature/create-image-with-model
 .env
 .env.local
 .env.*.local
