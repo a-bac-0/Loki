@@ -13,14 +13,10 @@ diffusers
 pillow
 requests
 python-dotenv
-PyYAML
 pyyaml
 deep-translator
 langdetect
 dotenv
-
-# Dev and utility
-
 
 # Optional: for image generation and scientific RAG
 scikit-learn
@@ -30,12 +26,6 @@ torch
 # For arXiv ingestion
 arxiv
 
-# If you use LM Studio, ComfyUI, or other local models, add their dependencies as needed
-
-
-# financial
-streamlit
-pandas
+# Financial
 yfinance
 datetime
-requests
