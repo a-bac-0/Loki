@@ -1,43 +1,27 @@
-<<<<<<< HEAD
-<<<<<<< HEAD
-# Archivos de entorno - NO SUBIR A GIT
-=======
-Entorno virtual
-=======
-
-
-# Entorno virtual
->>>>>>> feature/merge
 venv/
 .venv/
+.qodo/
 ENV/
 env/
 __pycache__/
 *.pyc
 pycache/
 
-<<<<<<< HEAD
-Archivos de configuración local
->>>>>>> feature/create-image-with-model
-=======
+
 # Imagenes IA
-imagenes_IA/
+app/imagenes_IA/
 
 # Environment variables and secrets
->>>>>>> feature/merge
+
 .env
 .env.local
 .env.*.local
 
-<<<<<<< HEAD
 # Configuración sensible
 config.json
 secrets.json
 
 # Logs
-=======
-# Logs and temp files
->>>>>>> feature/merge
 *.log
 
 # Python
@@ -71,57 +55,8 @@ ENV/
 .vscode/
 .idea/
 *.swp
-<<<<<<< HEAD
 *.swo
 
 # OS
 .DS_Store
 Thumbs.db
-=======
-
-# OS files
-.DS_Store
-Thumbs.db
-
-# Streamlit and notebook artifacts
-.streamlit/
-.frontend_cache/
-.ipynb_checkpoints/
-
-# VSCode
-.vscode/
-
-# Docker
-*.pid
-*.sock
-*.tar
-docker-compose.override.yml
-
-# Data outputs
-/data/output/
-data/output/
-output/
-*.db
-*.sqlite3
-
-# Generated images
-images_generated/
-*.png
-*.jpg
-*.jpeg
-*.gif
-
-# Large local models
-models/
-llm_weights/
-*.bin
-
-# Build artifacts
-cache/
-dist/
-build/
-.eggs/
-*.egg-info/
-
-# Other common ignores
->>>>>>> feature/merge
