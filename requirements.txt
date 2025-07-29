@@ -31,3 +31,11 @@ torch
 arxiv
 
 # If you use LM Studio, ComfyUI, or other local models, add their dependencies as needed
+
+
+# financial
+streamlit
+pandas
+yfinance
+datetime
+requests
