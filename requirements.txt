@@ -1,6 +1,8 @@
 # Main dependencies
 streamlit
 langchain
+langchain-ollama
+langchain-community
 langsmith
 chromadb
 sentence-transformers
