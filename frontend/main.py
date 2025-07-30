@@ -1,439 +1,178 @@
-## frontend/main.py - PARTE 1: CONFIGURACIÓN E IMPORTS
+##loki-claves
+
+## frontend/main.py
 import json
 import os
 import re
 import sys
 import time
 from datetime import datetime, timedelta
+
 import requests
 import streamlit as st
+import dotenv
+from deep_translator import DeeplTranslator
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Load environment variables at startup
+dotenv.load_dotenv()
 
-from app.rag.rag_chain import generate_scientific_content
+# Debug: Print if .env file exists
+env_file_path = os.path.join(os.getcwd(), '.env')
+if os.path.exists(env_file_path):
+    print(f"✅ .env file found at: {env_file_path}")
+else:
+    print(f"❌ .env file not found at: {env_file_path}")
+    # Try alternative locations
+    alt_paths = ['./.env', '../.env', '../../.env']
+    for alt_path in alt_paths:
+        if os.path.exists(alt_path):
+            print(f"✅ Found .env at alternative location: {alt_path}")
+            dotenv.load_dotenv(alt_path)
+            break
 
-try:
-    from langsmith import LangSmithCallbackHandler
-except ImportError:
-    try:
-        from langchain.callbacks.tracers.langsmith import LangSmithCallbackHandler
-    except ImportError:
-        LangSmithCallbackHandler = None
-
-# Configuración de página con estilo Meta
+# Configure Streamlit page
 st.set_page_config(
-    page_title="ContentAI Pro | Meta Style",
-    page_icon="⚡",
+    page_title="🧠 Generador de Contenido IA",
+    page_icon="🧠",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="expanded"
 )
 
-# CSS Estilo Meta profesional
+# CSS Styles
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
-    
-    :root {
-        --meta-blue: #1877f2;
-        --meta-blue-dark: #166fe5;
-        --meta-blue-light: #42a5f5;
-        --meta-gray-50: #f8f9fa;
-        --meta-gray-100: #e4e6ea;
-        --meta-gray-200: #dadde1;
-        --meta-gray-300: #ced0d4;
-        --meta-gray-400: #8a8d91;
-        --meta-gray-500: #65676b;
-        --meta-gray-600: #4e4f50;
-        --meta-gray-700: #3e4042;
-        --meta-gray-800: #1c1e21;
-        --meta-gray-900: #18191a;
-        --meta-white: #ffffff;
-        --meta-hero: linear-gradient(90deg, #8e2de2 0%, #4a00e0 100%);;
-        --meta-green: #00a400;
-        --meta-red: #fa3e3e;
-        --meta-orange: #ff6600;
-        --meta-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        --meta-shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.12);
-        --meta-radius: 8px;
-        --meta-radius-lg: 12px;
-        --meta-transition: all 0.2s cubic-bezier(0.17, 0.17, 0, 1);
-    }
+.hero-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 2rem;
+    border-radius: 10px;
+    color: white;
+    text-align: center;
+    margin-bottom: 2rem;
+}
 
-    /* Reset y base */
-    .main .block-container {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-        padding: 2rem 1.5rem;
-        max-width: 1200px;
-        color: var(--meta-gray-800);
-        background: var(--meta-gray-50);
-    }
+.generated-content {
+    background: #f8f9fa;
+    border-left: 4px solid #667eea;
+    padding: 1rem;
+    border-radius: 8px;
+    margin: 1rem 0;
+}
 
-    /* Tipografía estilo Meta */
-    h1, h2, h3, h4, h5, h6 {
-        font-weight: 700;
-        letter-spacing: -0.02em;
-        line-height: 1.2;
-        color: var(--meta-gray-900);
-    }
+.progress-step {
+    color: #667eea;
+    font-weight: bold;
+    margin: 0.5rem 0;
+}
 
-    /* Header principal estilo Meta */
-    .meta-header {
-        background: var(--meta-hero);
-        padding: 3rem 2rem;
-        border-radius: var(--meta-radius-lg);
-        text-align: center;
-        margin-bottom: 2rem;
-        color: var(--meta-white);
-        position: relative;
-        overflow: hidden;
-        box-shadow: var(--meta-shadow-lg);
-    }
+.api-status {
+    padding: 0.5rem;
+    border-radius: 5px;
+    margin: 0.2rem 0;
+}
 
-    .meta-header::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: linear-gradient(45deg, rgba(255,255,255,0.1) 0%, transparent 50%);
-        z-index: 1;
-    }
+.api-configured {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
 
-    .meta-header h1 {
-        font-size: 2.5rem;
-        font-weight: 800;
-        margin: 0 0 0.5rem 0;
-        position: relative;
-        z-index: 2;
-        color: var(--meta-white);
-    }
-
-    .meta-header p {
-        font-size: 1.125rem;
-        opacity: 0.95;
-        margin: 0;
-        position: relative;
-        z-index: 2;
-        font-weight: 400;
-    }
-
-    /* Cards estilo Meta */
-    .meta-card {
-        background: var(--meta-white);
-        border-radius: var(--meta-radius);
-        padding: 0.5rem;
-        margin: 1rem 0;
-        border: 1px solid var(--meta-gray-200);
-        box-shadow: var(--meta-shadow);
-        transition: var(--meta-transition);
-    }
-
-    .meta-card-line {
-        background: var(--meta-hero);
-        border-radius: var(--meta-radius);
-        padding: 0.5rem;
-        border: 1px solid var(--meta-gray-200);
-        box-shadow: var(--meta-shadow);
-        transition: var(--meta-transition);
-    }
-
-    .meta-card:hover {
-        transform: translateY(-2px);
-        box-shadow: var(--meta-shadow-lg);
-        border-color: var(--meta-blue-light);
-    }
-
-    /* Botones estilo Meta */
-    .stButton > button {
-        background: var(--meta-blue) !important;
-        color: var(--meta-white) !important;
-        border: none !important;
-        border-radius: var(--meta-radius) !important;
-        padding: 0.75rem 1.5rem !important;
-        font-weight: 600 !important;
-        font-size: 0.875rem !important;
-        transition: var(--meta-transition) !important;
-        width: 100% !important;
-        text-transform: none !important;
-        letter-spacing: 0 !important;
-    }
-
-    .stButton > button:hover {
-        background: var(--meta-blue-dark) !important;
-        transform: translateY(-1px) !important;
-        box-shadow: var(--meta-shadow-lg) !important;
-    }
-
-    /* Estados de API estilo Meta */
-    .meta-status {
-        padding: 0.75rem 1rem;
-        border-radius: var(--meta-radius);
-        margin: 0.5rem 0;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-weight: 500;
-        font-size: 0.875rem;
-        transition: var(--meta-transition);
-    }
-
-    .meta-status.connected {
-        background: #e8f5e8;
-        color: var(--meta-green);
-        border: 1px solid #c3e6c3;
-    }
-
-    .meta-status.disconnected {
-        background: #ffeaea;
-        color: var(--meta-red);
-        border: 1px solid #ffb3b3;
-    }
-
-    /* Inputs estilo Meta */
-    .stTextInput > div > div > input {
-        border-radius: var(--meta-radius) !important;
-        border: 2px solid var(--meta-gray-200) !important;
-        padding: 0.75rem 1rem !important;
-        font-size: 0.875rem !important;
-        transition: var(--meta-transition) !important;
-        background: var(--meta-white) !important;
-    }
-
-    .stTextInput > div > div > input:focus {
-        border-color: var(--meta-blue) !important;
-        box-shadow: 0 0 0 2px rgba(24, 119, 242, 0.1) !important;
-    }
-
-    /* Selectbox estilo Meta */
-    .stSelectbox > div > div {
-        border-radius: var(--meta-radius) !important;
-        border: 2px solid var(--meta-gray-200) !important;
-    }
-
-    /* Content preview estilo Meta */
-    .meta-content-preview {
-        background: var(--meta-white);
-        border: 1px solid var(--meta-gray-200);
-        border-radius: var(--meta-radius);
-        padding: 1.5rem;
-        margin: 1rem 0;
-        font-family: 'Inter', sans-serif;
-        line-height: 1.6;
-        box-shadow: var(--meta-shadow);
-    }
-
-    /* Sidebar estilo Meta */
-    .css-1d391kg {
-        background: var(--meta-white) !important;
-        border-right: 1px solid var(--meta-gray-200) !important;
-    }
-
-    /* Métricas estilo Meta */
-    .meta-metric {
-        background: var(--meta-white);
-        padding: 1rem;
-        border-radius: var(--meta-radius);
-        border: 1px solid var(--meta-gray-200);
-        text-align: center;
-        transition: var(--meta-transition);
-        box-shadow: var(--meta-shadow);
-    }
-
-    .meta-metric:hover {
-        transform: translateY(-2px);
-        box-shadow: var(--meta-shadow-lg);
-    }
-
-    .meta-metric-value {
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: var(--meta-blue);
-        margin: 0.25rem 0;
-    }
-
-    .meta-metric-label {
-        font-size: 0.75rem;
-        color: var(--meta-gray-500);
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    /* Radio buttons estilo Meta */
-    .stRadio > div {
-        gap: 0.5rem !important;
-    }
-
-    .stRadio > div > label {
-        background: var(--meta-white) !important;
-        border: 2px solid var(--meta-gray-200) !important;
-        border-radius: var(--meta-radius) !important;
-        padding: 0.75rem 1rem !important;
-        margin: 0.25rem 0 !important;
-        transition: var(--meta-transition) !important;
-        cursor: pointer !important;
-    }
-
-    .stRadio > div > label:hover {
-        border-color: var(--meta-blue-light) !important;
-        background: var(--meta-gray-50) !important;
-    }
-
-    /* Animaciones */
-    @keyframes fadeInUp {
-        from {
-            opacity: 0;
-            transform: translateY(20px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    .fade-in-up {
-        animation: fadeInUp 0.4s ease-out;
-    }
-
-    /* Responsive */
-    @media (max-width: 768px) {
-        .meta-header h1 {
-            font-size: 2rem;
-        }
-        .meta-header {
-            padding: 2rem 1rem;
-        }
-        .main .block-container {
-            padding: 1rem;
-        }
-    }
+.api-not-configured {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# Importar el agente de contenido visual si está disponible
-try:
-    from app.agents.content_visual_agent import ContentVisualAgent
-except ImportError:
-    ContentVisualAgent = None
-
-## frontend/main.py - PARTE 2: CONTENTGENERATOR CLASS
-
+# ContentGenerator class with all methods
 class ContentGenerator:
-    """Generador de contenido unificado con múltiples opciones de IA"""
-
     def __init__(self):
         self.openai_key = None
         self.groq_key = None
         self.unsplash_key = None
+        self.deepl_key = None  # Add DeepL key
         self.api_configured = False
         self.groq_configured = False
         self.unsplash_configured = False
+        self.deepl_configured = False  # Add DeepL status
 
-    def configure_apis(self, openai_key=None, groq_key=None, unsplash_key=None):
-        """Configurar APIs"""
+    def configure_apis(self, openai_key=None, groq_key=None, unsplash_key=None, deepl_key=None):
+        """Configure API keys and set status flags"""
         self.openai_key = openai_key
         self.groq_key = groq_key
         self.unsplash_key = unsplash_key
+        self.deepl_key = deepl_key
+        
         self.api_configured = bool(openai_key)
         self.groq_configured = bool(groq_key)
         self.unsplash_configured = bool(unsplash_key)
+        self.deepl_configured = bool(deepl_key)
 
-    def extract_visual_concepts_from_content(self, content, topic=""):
-        """Extrae conceptos visuales del contenido generado usando análisis semántico"""
-        if not content:
-            return ["business", "professional"]
-
-        full_text = f"{topic} {content}".lower()
-        visual_keywords = self._extract_visual_keywords(full_text)
-        main_entities = self._extract_main_entities(full_text)
-        thematic_context = self._determine_thematic_context(full_text)
-
-        all_concepts = visual_keywords + main_entities + thematic_context
-        clean_concepts = self._clean_and_prioritize_concepts(all_concepts)
-
-        if len(clean_concepts) < 2:
-            smart_fallbacks = self._generate_contextual_fallbacks(content, topic)
-            clean_concepts.extend(smart_fallbacks)
-
-        return clean_concepts[:5]
-
-    def _extract_visual_keywords(self, text):
-        """Extrae palabras con fuerte componente visual del texto"""
-        visual_patterns = {
-            'objects': r'\b(computer|laptop|phone|device|book|office|workspace|desk|meeting|presentation)\b',
-            'activities': r'\b(working|creating|building|designing|planning|analyzing|learning|teaching)\b',
-            'concepts': r'\b(innovation|technology|success|growth|teamwork|leadership|creativity)\b',
-            'environments': r'\b(office|home|studio|classroom|outdoor|urban|modern|professional)\b'
-        }
-
-        visual_words = []
-        for category, pattern in visual_patterns.items():
-            matches = re.findall(pattern, text, re.IGNORECASE)
-            visual_words.extend([match.lower() for match in matches])
-
-        return list(dict.fromkeys(visual_words))[:3]
-
-    def _extract_main_entities(self, text):
-        """Extrae las entidades/sustantivos principales del texto"""
-        stop_words = {
-            'the', 'and', 'for', 'with', 'you', 'your', 'this', 'that', 'will', 'can',
-            'are', 'is', 'have', 'has', 'more', 'most', 'make', 'get', 'como', 'para',
-            'con', 'por', 'una', 'los', 'las', 'del', 'que', 'sus', 'muy', 'más'
-        }
-
-        words = re.findall(r'\b[a-zA-ZáéíóúÁÉÍÓÚñÑ]{4,12}\b', text)
-
-        word_freq = {}
-        for word in words:
-            word_lower = word.lower()
-            if word_lower not in stop_words and word_lower.isalpha():
-                word_freq[word_lower] = word_freq.get(word_lower, 0) + 1
-
-        sorted_entities = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)
-        return [word for word, freq in sorted_entities[:4] if freq >= 1]
-
-    def _determine_thematic_context(self, text):
-        """Determina el contexto temático y sugiere conceptos visuales apropiados"""
-        context_indicators = {
-            'technology': {
-                'keywords': ['technology', 'digital', 'ai', 'artificial', 'data', 'software', 'innovation'],
-                'visual_concepts': ['technology', 'computer', 'innovation', 'digital']
-            },
-            'business': {
-                'keywords': ['business', 'company', 'market', 'sales', 'revenue', 'professional', 'strategy'],
-                'visual_concepts': ['business meeting', 'professional', 'success', 'teamwork']
-            },
-            'education': {
-                'keywords': ['learn', 'education', 'teaching', 'student', 'course', 'knowledge'],
-                'visual_concepts': ['learning', 'books', 'education', 'classroom']
-            },
-            'creativity': {
-                'keywords': ['creative', 'design', 'art', 'visual', 'innovative', 'inspiration'],
-                'visual_concepts': ['creative', 'design', 'art', 'inspiration']
-            },
-            'health': {
-                'keywords': ['health', 'wellness', 'fitness', 'exercise', 'medical', 'care'],
-                'visual_concepts': ['health', 'fitness', 'wellness', 'exercise']
-            },
-            'communication': {
-                'keywords': ['social', 'media', 'communication', 'network', 'connect', 'share'],
-                'visual_concepts': ['communication', 'social media', 'networking', 'team']
+    def translate_content(self, content, target_language):
+        """Translate content using DeepL API"""
+        if not self.deepl_configured or target_language == 'en':
+            return content, "No translation needed"
+            
+        try:
+            # DeepL language codes mapping (expanded)
+            deepl_codes = {
+                'es': 'ES',
+                'fr': 'FR', 
+                'de': 'DE',
+                'it': 'IT',
+                'pt': 'PT-PT',  # Portuguese (Portugal) - also supports PT-BR
+                'zh': 'ZH',
+                'ja': 'JA',
+                'ko': 'KO',
+                'ru': 'RU',
+                'nl': 'NL',
+                'pl': 'PL',
+                'sv': 'SV',
+                'da': 'DA',
+                'fi': 'FI',
+                'no': 'NB',  # Norwegian Bokmål
+                'cs': 'CS',  # Czech
+                'sk': 'SK',  # Slovak
+                'sl': 'SL',  # Slovenian
+                'et': 'ET',  # Estonian
+                'lv': 'LV',  # Latvian
+                'lt': 'LT',  # Lithuanian
+                'hu': 'HU',  # Hungarian
+                'ro': 'RO',  # Romanian
+                'bg': 'BG',  # Bulgarian
+                'el': 'EL',  # Greek
+                'tr': 'TR',  # Turkish
+                'ar': 'AR',  # Arabic
+                'hi': 'HI',  # Hindi
+                'id': 'ID',  # Indonesian
+                'uk': 'UK',  # Ukrainian
             }
-        }
-
-        detected_concepts = []
-
-        for context, data in context_indicators.items():
-            for keyword in data['keywords']:
-                if keyword in text:
-                    detected_concepts.extend(data['visual_concepts'][:2])
-                    break
-
-        return detected_concepts[:3]
+            
+            target_code = deepl_codes.get(target_language)
+            if not target_code:
+                return content, f"Language {target_language} not supported by DeepL"
+            
+            # Use deep_translator which is more robust
+            translator = DeeplTranslator(api_key=self.deepl_key, source="auto", target=target_code)
+            translated = translator.translate(content)
+            
+            if translated and translated != content:
+                return translated, f"Translated to {target_language} with DeepL"
+            else:
+                return content, f"Translation to {target_language} returned same content"
+            
+        except Exception as e:
+            # Return original content with error message but don't fail completely
+            error_msg = str(e)
+            if "quota" in error_msg.lower() or "limit" in error_msg.lower():
+                return content, f"DeepL quota exceeded - showing original content"
+            elif "key" in error_msg.lower() or "auth" in error_msg.lower():
+                return content, f"DeepL authentication error - showing original content"
+            else:
+                return content, f"Translation error: {error_msg} - showing original content"
 
     def _clean_and_prioritize_concepts(self, concepts):
-        """Limpia y prioriza los conceptos extraídos"""
+        """Clean and prioritize extracted concepts"""
         if not concepts:
             return []
 
@@ -446,42 +185,60 @@ class ContentGenerator:
 
             clean_concept = str(concept).strip().lower()
 
-            if (len(clean_concept) >= 3 and 
-                len(clean_concept) <= 20 and 
-                clean_concept not in seen and
-                clean_concept.replace(' ', '').isalpha()):
-
-                seen.add(clean_concept)
+            if (
+                len(clean_concept) >= 3
+                and len(clean_concept) <= 20
+                and clean_concept not in seen
+                and clean_concept.replace(" ", "").isalpha()
+            ):
                 clean_concepts.append(clean_concept)
+                seen.add(clean_concept)
 
         return clean_concepts
 
-    def _generate_contextual_fallbacks(self, content, topic):
-        """Genera conceptos de respaldo basados en el contexto del contenido"""
-        fallbacks = []
+    def extract_visual_concepts_from_content(self, content, topic=""):
+        """Extract visual concepts from content for image search"""
+        if not content:
+            return ["business", "professional", "modern"]
 
-        if len(content) > 200:
-            fallbacks.extend(["article", "information", "reading"])
-
-        if "#" in content or "@" in content:
-            fallbacks.extend(["social media", "communication", "smartphone"])
-
-        if any(emoji in content for emoji in "🚀💡✨🎯"):
-            fallbacks.extend(["modern", "vibrant", "innovative"])
-
-        if "•" in content or "1." in content:
-            fallbacks.extend(["presentation", "infographic", "organization"])
-
+        # Simple keyword extraction
+        import re
+        
+        # Remove common words and extract meaningful terms
+        stop_words = {
+            'es': ['el', 'la', 'de', 'que', 'y', 'a', 'en', 'un', 'es', 'se', 'no', 'te', 'lo', 'le', 'da', 'su', 'por', 'son', 'con', 'para', 'al', 'una', 'su', 'del', 'las', 'los'],
+            'en': ['the', 'is', 'at', 'which', 'on', 'and', 'a', 'to', 'are', 'as', 'was', 'with', 'for', 'his', 'he', 'be', 'not', 'by', 'but', 'have', 'you', 'that', 'this']
+        }
+        
+        # Extract words from content
+        words = re.findall(r'\b[a-zA-ZáéíóúÁÉÍÓÚñÑ]{4,}\b', content.lower())
+        
+        # Filter out stop words
+        filtered_words = []
+        for word in words:
+            is_stop_word = False
+            for lang_stops in stop_words.values():
+                if word in lang_stops:
+                    is_stop_word = True
+                    break
+            if not is_stop_word:
+                filtered_words.append(word)
+        
+        # Get most frequent words
+        from collections import Counter
+        word_counts = Counter(filtered_words)
+        concepts = [word for word, count in word_counts.most_common(5)]
+        
+        # Add topic words if provided
         if topic:
-            topic_words = [word.lower() for word in topic.split() if len(word) > 3]
-            fallbacks.extend(topic_words[:2])
-
-        fallbacks.extend(["business", "professional", "success", "modern"])
-
-        return fallbacks[:4]
+            topic_words = re.findall(r'\b[a-zA-ZáéíóúÁÉÍÓÚñÑ]{4,}\b', topic.lower())
+            concepts.extend(topic_words)
+        
+        # Clean and return
+        return self._clean_and_prioritize_concepts(concepts)
 
     def _perform_unsplash_search(self, query, orientation="landscape"):
-        """Realiza la búsqueda real en Unsplash con parámetros optimizados"""
+        """Perform actual Unsplash search with optimized parameters"""
         try:
             url = "https://api.unsplash.com/search/photos"
             headers = {"Authorization": f"Client-ID {self.unsplash_key}"}
@@ -490,7 +247,7 @@ class ContentGenerator:
                 "per_page": 15,
                 "orientation": orientation,
                 "content_filter": "high",
-                "order_by": "relevant"
+                "order_by": "relevant",
             }
 
             response = requests.get(url, headers=headers, params=params, timeout=12)
@@ -498,10 +255,12 @@ class ContentGenerator:
             if response.status_code == 200:
                 data = response.json()
                 if data["results"]:
+                    # Look for high quality image
                     for image_data in data["results"]:
-                        if (image_data.get("width", 0) >= 800 and 
-                            image_data.get("height", 0) >= 600):
-
+                        if (
+                            image_data.get("width", 0) >= 800
+                            and image_data.get("height", 0) >= 600
+                        ):
                             return {
                                 "url": image_data["urls"]["regular"],
                                 "thumb": image_data["urls"]["thumb"],
@@ -510,9 +269,10 @@ class ContentGenerator:
                                 "author_url": image_data["user"]["links"]["html"],
                                 "download_url": image_data["links"]["download_location"],
                                 "width": image_data.get("width", 0),
-                                "height": image_data.get("height", 0)
-                            }, "Imagen de alta calidad encontrada"
+                                "height": image_data.get("height", 0),
+                            }, "High quality image found"
 
+                    # If no high res images, take first available
                     image_data = data["results"][0]
                     return {
                         "url": image_data["urls"]["regular"],
@@ -522,39 +282,47 @@ class ContentGenerator:
                         "author_url": image_data["user"]["links"]["html"],
                         "download_url": image_data["links"]["download_location"],
                         "width": image_data.get("width", 0),
-                        "height": image_data.get("height", 0)
-                    }, "Imagen encontrada"
+                        "height": image_data.get("height", 0),
+                    }, "Image found"
                 else:
-                    return None, f"Sin resultados para '{query}'"
+                    return None, f"No results for '{query}'"
 
             elif response.status_code == 403:
-                return None, "API key inválida o sin permisos"
+                return None, "Invalid API key or no permissions"
             elif response.status_code == 429:
-                return None, "Límite de velocidad alcanzado"
+                return None, "Rate limit reached"
             else:
-                return None, f"Error HTTP {response.status_code}"
+                return None, f"HTTP Error {response.status_code}"
 
         except requests.exceptions.Timeout:
-            return None, "Timeout en búsqueda"
+            return None, "Search timeout"
         except Exception as e:
             return None, f"Error: {str(e)}"
 
     def search_unsplash_image_intelligent(self, content, topic="", platform="", orientation="landscape"):
-        """Búsqueda inteligente de imágenes basada en análisis del contenido real"""
+        """Intelligent image search based on real content analysis"""
         if not self.unsplash_key:
-            return None, "API key de Unsplash no configurada"
+            return None, "Unsplash API key not configured"
 
         try:
+            # Intelligent content analysis for visual concepts
             visual_concepts = self.extract_visual_concepts_from_content(content, topic)
-
+            
+            # Progressive search strategies
             search_strategies = [
+                # 1. Specific content concepts
                 visual_concepts[:2],
-                [f"{visual_concepts[0]} {visual_concepts[1]}"] if len(visual_concepts) >= 2 else [],
-                [f"{visual_concepts[0]} {platform.lower()}"] if visual_concepts and platform else [],
-                [topic] if topic and len(topic.split()) <= 2 else [],
-                ["professional workspace", "business success", "modern technology"]
+                # 2. Concept combinations
+                ([f"{visual_concepts[0]} {visual_concepts[1]}"] if len(visual_concepts) >= 2 else []),
+                # 3. Concepts with platform context
+                ([f"{visual_concepts[0]} {platform.lower()}"] if visual_concepts and platform else []),
+                # 4. Original topic if simple
+                ([topic] if topic and len(topic.split()) <= 2 else []),
+                # 5. Universal fallback concepts
+                ["professional workspace", "business success", "modern technology"],
             ]
 
+            # Try each strategy
             for strategy_num, keywords_list in enumerate(search_strategies, 1):
                 if not keywords_list:
                     continue
@@ -563,1042 +331,902 @@ class ContentGenerator:
                     if not keyword or len(keyword.strip()) < 3:
                         continue
 
+                    # Perform search
                     image_result = self._perform_unsplash_search(keyword.strip(), orientation)
 
-                    if image_result[0]:
-                        return image_result[0], f"✅ Encontrada con '{keyword}' (Análisis inteligente - Estrategia {strategy_num})"
+                    if image_result[0]:  # If image found
+                        return (
+                            image_result[0],
+                            f"✅ Found with '{keyword}' (Intelligent analysis - Strategy {strategy_num})",
+                        )
 
+            # If nothing found
             attempted_keywords = [kw for strategy in search_strategies for kw in strategy if kw][:5]
-            return None, f"❌ Sin resultados tras análisis inteligente. Probados: {', '.join(attempted_keywords[:3])}..."
+            return (
+                None,
+                f"❌ No results after intelligent analysis. Tried: {', '.join(attempted_keywords[:3])}...",
+            )
 
         except Exception as e:
-            return None, f"Error en búsqueda inteligente: {str(e)}"
-## frontend/main.py - PARTE 3: MÉTODOS DE GENERACIÓN IA
+            return None, f"Error in intelligent search: {str(e)}"
 
-    def generate_with_groq(self, topic, platform, audience, tone="profesional", creator_name=""):
-        """Generar contenido real con Groq (Ultra rápido y gratuito)"""
+    def generate_with_groq(self, topic, platform, audience, tone="profesional", language="es"):
+        """Generate real content with Groq (Ultra fast and free)"""
         if not self.groq_key:
-            return None, "API key de Groq no configurada"
+            return None, "Groq API key not configured"
 
         try:
             platform_instructions = {
-                "twitter": "Crea un tweet atractivo y conciso (máximo 280 caracteres)",
-                "blog": "Crea una introducción engaging para un artículo de blog",
-                "instagram": "Crea un post visual para Instagram con emojis y hashtags",
-                "linkedin": "Crea un post profesional para LinkedIn"
+                "twitter": "Create an attractive and concise tweet (max 280 characters)",
+                "blog": "Create an engaging introduction for a blog article", 
+                "instagram": "Create a visual post for Instagram with emojis and hashtags",
+                "linkedin": "Create a professional post for LinkedIn",
             }
 
             headers = {
                 "Authorization": f"Bearer {self.groq_key}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             }
 
-            creator_instruction = ""
-            if creator_name:
-                creator_instruction = f"\n8. Al final del contenido, añade una línea separadora (---) y luego '✍️ Creado por {creator_name}'"
-
+            # Language specific instructions
+            language_instructions = {
+                'es': 'Responde en español',
+                'en': 'Respond in English', 
+                'fr': 'Répondez en français',
+                'de': 'Antworten Sie auf Deutsch',
+                'it': 'Rispondi in italiano',
+                'pt': 'Responda em português',
+                'zh': '请用中文回答'
+            }
+            
+            lang_instruction = language_instructions.get(language, 'Respond in English')
+            
+            # Generate directly in target language or English as fallback
             system_prompt = f"""
-            Eres un experto en marketing de contenidos y redes sociales con estilo Meta/Facebook.
+            You are an expert in content marketing and social media.
             
-            Tarea: {platform_instructions.get(platform.lower(), 'Crear contenido para redes sociales')}
-            Plataforma: {platform}
-            Audiencia: {audience}
-            Tono: {tone}
+            Task: {platform_instructions.get(platform.lower(), 'Create social media content')}
+            Platform: {platform}
+            Audience: {audience}
+            Tone: {tone}
+            Language: {language}
             
-            Instrucciones:
-            1. Crea contenido 100% original y atractivo
-            2. Usa un tono {tone} pero moderno
-            3. Optimiza específicamente para {platform}
-            4. Incluye emojis relevantes (estilo Meta)
-            5. Añade hashtags apropiados al final
-            6. Haz que sea engaging para {audience}
-            7. Que invite a la interacción{creator_instruction}
+            Instructions:
+            1. Create 100% original and attractive content
+            2. Use a {tone} tone
+            3. Optimize specifically for {platform}
+            4. Include relevant emojis
+            5. Add appropriate hashtags at the end
+            6. Make it engaging for {audience}
+            7. Encourage interaction
+            8. {lang_instruction}
             
-            Responde SOLO con el contenido final, sin explicaciones adicionales.
+            Respond ONLY with the final content, no additional explanations.
             """
 
             data = {
                 "messages": [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Crea contenido sobre: {topic}"}
+                    {"role": "user", "content": f"Create content about: {topic}"},
                 ],
                 "model": "llama3-70b-8192",
                 "temperature": 0.7,
                 "max_tokens": 500,
                 "top_p": 0.9,
-                "stream": False
+                "stream": False,
             }
 
             response = requests.post(
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers=headers,
                 json=data,
-                timeout=30
+                timeout=30,
             )
 
             if response.status_code == 200:
                 result = response.json()
                 content = result["choices"][0]["message"]["content"].strip()
-
-                if creator_name and f"Creado por {creator_name}" not in content:
-                    content += f"\n\n---\n✍️ Creado por {creator_name}"
-
-                return content, "✅ Contenido generado con Groq Llama3-70B"
+                
+                # Fallback translation if content appears to be in English and target is not English
+                if language != 'en' and self.deepl_configured:
+                    # Simple check if content contains English words (basic heuristic)
+                    english_indicators = ['the', 'and', 'for', 'with', 'this', 'that', 'your', 'you', 'are', 'is']
+                    content_lower = content.lower()
+                    english_word_count = sum(1 for word in english_indicators if word in content_lower)
+                    
+                    # If content seems to be in English, translate it
+                    if english_word_count >= 2:
+                        translated_content, translation_status = self.translate_content(content, language)
+                        return translated_content, f"Generated with Groq + {translation_status}"
+                
+                return content, f"Content generated with Groq Llama3-70B in {language.upper()}"
             elif response.status_code == 401:
-                return None, "❌ API key de Groq inválida"
+                return None, "Invalid Groq API key"
             elif response.status_code == 429:
-                return None, "⏳ Límite de velocidad alcanzado. Espera un momento."
+                return None, "Rate limit reached. Wait a moment."
             else:
-                return None, f"❌ Error en API de Groq: {response.status_code}"
+                return None, f"Groq API error: {response.status_code}"
 
         except requests.exceptions.Timeout:
-            return None, "⏳ Timeout conectando con Groq"
+            return None, "Timeout connecting to Groq"
         except Exception as e:
-            return None, f"❌ Error con Groq: {str(e)}"
+            return None, f"Groq error: {str(e)}"
 
-    def generate_with_lmstudio_comfyui(self, topic, platform, audience, tone="profesional"):
-        """Genera contenido de texto e imagen utilizando LM Studio y ComfyUI"""
-        try:
-            if not st.session_state.get("has_content_visual_agent", False):
-                return None, "❌ El agente de contenido visual no está disponible."
-
-            agent = st.session_state.content_visual_agent
-            services = agent.check_services()
-
-            if not all(services.values()):
-                return None, "❌ No se pudo conectar a LM Studio o ComfyUI."
-
-            with st.status("🎨 Generando contenido visual...", expanded=True) as status:
-                status.update(label="🧠 Generando texto con LM Studio...")
-
-                def status_update(msg):
-                    status.update(label=msg)
-
-                content_result = agent.generate_complete_content(
-                    topic=topic,
-                    platform=platform,
-                    audience=audience,
-                    tone=tone,
-                    status_callback=status_update,
-                )
-
-                if content_result and "content" in content_result:
-                    status.update(label="✅ ¡Contenido visual generado con éxito!", state="complete")
-                    return content_result.get("content", ""), "✅ Contenido generado con LM Studio y ComfyUI"
-                else:
-                    status.update(label="✅ Se generó el contenido", state="complete")
-                    return content_result.get("content", ""), "✅ Texto generado con LM Studio"
-
-        except Exception as e:
-            return None, f"❌ Error al generar contenido visual: {str(e)}"
-
-    def generate_with_openai(self, topic, platform, audience, tone="profesional", creator_name=""):
-        """Generar contenido real con OpenAI"""
+    def generate_with_openai(self, topic, platform, audience, tone="profesional", language="es"):
+        """Generate real content with OpenAI"""
         if not self.openai_key:
-            return None, "❌ API key de OpenAI no configurada"
+            return None, "OpenAI API key not configured"
 
         try:
-            import openai
-            openai.api_key = self.openai_key
-
-            platform_prompts = {
-                "twitter": "Crea un tweet atractivo y conciso (máximo 280 caracteres)",
-                "blog": "Crea una introducción engaging para un artículo de blog",
-                "instagram": "Crea un post visual para Instagram con emojis y hashtags",
-                "linkedin": "Crea un post profesional para LinkedIn"
+            headers = {
+                "Authorization": f"Bearer {self.openai_key}",
+                "Content-Type": "application/json",
             }
 
-            creator_instruction = ""
-            if creator_name:
-                creator_instruction = f"\nAl final, añade: '---\n✍️ Creado por {creator_name}'"
+            platform_prompts = {
+                "twitter": "Create an attractive and concise tweet (max 280 characters)",
+                "blog": "Create an engaging introduction for a blog article",
+                "instagram": "Create a visual post for Instagram with emojis and hashtags",
+                "linkedin": "Create a professional post for LinkedIn",
+            }
 
+            # Language specific instructions
+            language_instructions = {
+                'es': 'Responde en español',
+                'en': 'Respond in English', 
+                'fr': 'Répondez en français',
+                'de': 'Antworten Sie auf Deutsch',
+                'it': 'Rispondi in italiano',
+                'pt': 'Responda em português',
+                'zh': '请用中文回答'
+            }
+            
+            lang_instruction = language_instructions.get(language, 'Respond in English')
+
+            # Generate directly in target language
             system_prompt = f"""
-            Eres un experto en marketing de contenidos con estilo Meta/Facebook.
+            You are an expert in content marketing.
             
-            Tarea: {platform_prompts.get(platform.lower(), 'Crear contenido para redes sociales')}
-            Plataforma: {platform}
-            Audiencia: {audience}
-            Tono: {tone}
+            Task: {platform_prompts.get(platform.lower(), 'Create social media content')}
+            Platform: {platform}
+            Audience: {audience}
+            Tone: {tone}
+            Language: {language}
             
-            Instrucciones:
-            1. Crea contenido original y atractivo estilo Meta
-            2. Optimiza para {platform}
-            3. Usa un tono {tone}
-            4. Incluye emojis relevantes
-            5. Añade hashtags apropiados
-            6. Haz que sea engaging para {audience}{creator_instruction}
+            Instructions:
+            1. Create original and attractive content
+            2. Optimize for {platform}
+            3. Use a {tone} tone
+            4. Include relevant emojis
+            5. Add appropriate hashtags
+            6. Make it engaging for {audience}
+            7. {lang_instruction}
             """
 
-            response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
-                messages=[
+            data = {
+                "model": "gpt-3.5-turbo",
+                "messages": [
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Crea contenido sobre: {topic}"}
+                    {"role": "user", "content": f"Create content about: {topic}"},
                 ],
-                max_tokens=400,
-                temperature=0.7
+                "max_tokens": 400,
+                "temperature": 0.7,
+            }
+
+            response = requests.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers=headers,
+                json=data,
+                timeout=30,
             )
 
-            content = response.choices[0].message.content.strip()
-            if creator_name and f"Creado por {creator_name}" not in content:
-                content += f"\n\n---\n✍️ Creado por {creator_name}"
-
-            return content, "✅ Contenido generado con OpenAI GPT-3.5"
+            if response.status_code == 200:
+                result = response.json()
+                content = result["choices"][0]["message"]["content"].strip()
+                
+                # Fallback translation if content appears to be in English and target is not English
+                if language != 'en' and self.deepl_configured:
+                    # Simple check if content contains English words (basic heuristic)
+                    english_indicators = ['the', 'and', 'for', 'with', 'this', 'that', 'your', 'you', 'are', 'is']
+                    content_lower = content.lower()
+                    english_word_count = sum(1 for word in english_indicators if word in content_lower)
+                    
+                    # If content seems to be in English, translate it
+                    if english_word_count >= 2:
+                        translated_content, translation_status = self.translate_content(content, language)
+                        return translated_content, f"Generated with OpenAI + {translation_status}"
+                
+                return content, f"Content generated with OpenAI GPT-3.5 in {language.upper()}"
+            else:
+                return None, f"OpenAI API error: {response.status_code}"
 
         except Exception as e:
-            return None, f"❌ Error con OpenAI: {str(e)}"
+            return None, f"OpenAI error: {str(e)}"
 
-    def generate_with_ollama(self, topic, platform, audience, tone="profesional", creator_name=""):
-        """Generar contenido con Ollama local"""
+    def generate_with_ollama(self, topic, platform, audience, tone="profesional", language="es"):
+        """Generate content with local Ollama"""
         try:
-            creator_instruction = ""
-            if creator_name:
-                creator_instruction = f"\nAl final, añade: '---\n✍️ Creado por {creator_name}'"
-
+            # Language-specific prompt instructions
+            language_prompts = {
+                'es': f"Crea contenido en español para {platform} sobre: {topic}",
+                'en': f"Create English content for {platform} about: {topic}",
+                'fr': f"Créez du contenu en français pour {platform} à propos de: {topic}",
+                'de': f"Erstellen Sie deutschen Inhalt für {platform} über: {topic}",
+                'it': f"Crea contenuto in italiano per {platform} su: {topic}",
+                'pt': f"Crie conteúdo em português para {platform} sobre: {topic}",
+                'zh': f"为{platform}创建关于{topic}的中文内容"
+            }
+            
+            base_prompt = language_prompts.get(language, f"Create content for {platform} about: {topic}")
+            
             prompt = f"""
-            Crea contenido para {platform} sobre: {topic}
-            Audiencia: {audience}
-            Tono: {tone}
-            Estilo: Meta/Facebook profesional
+            {base_prompt}
+            Audience: {audience}
+            Tone: {tone}
+            Language: {language}
             
-            Requisitos:
-            - Contenido original y atractivo
-            - Optimizado para {platform}
-            - Incluye emojis relevantes
-            - Añade hashtags apropiados
-            - Que genere engagement{creator_instruction}
+            Requirements:
+            - Original and attractive content
+            - Optimized for {platform}
+            - Include relevant emojis
+            - Add appropriate hashtags
+            - Generate engagement
+            - Write in {language} language
             
-            Responde solo con el contenido, sin explicaciones.
+            Respond only with the content, no explanations.
             """
 
             response = requests.post(
                 "http://localhost:11434/api/generate",
                 json={"model": "llama2", "prompt": prompt, "stream": False},
-                timeout=30
+                timeout=30,
             )
 
             if response.status_code == 200:
-                content = response.json()["response"].strip()
-                if creator_name and f"Creado por {creator_name}" not in content:
-                    content += f"\n\n---\n✍️ Creado por {creator_name}"
-                return content, "✅ Contenido generado con Ollama Llama2"
+                content = response.json()["response"]
+                return content.strip(), f"Content generated with Ollama Llama2 in {language.upper()}"
             else:
-                return None, "❌ Error conectando con Ollama"
+                return None, "Error connecting to Ollama"
 
         except requests.exceptions.ConnectionError:
-            return None, "❌ Ollama no está ejecutándose. Instala y ejecuta: ollama run llama2"
+            return None, "Ollama is not running. Install and run: ollama run llama2"
         except Exception as e:
-            return None, f"❌ Error con Ollama: {str(e)}"
+            return None, f"Ollama error: {str(e)}"
 
-    def generate_demo_content(self, topic, platform, audience, tone="profesional", creator_name="", language="es"):
-        """Generar contenido demo mejorado con estilo Meta"""
+    def generate_demo_content(self, topic, platform, audience, tone="profesional", language="es"):
+        """Generate enhanced demo content with multi-language support"""
+        
         def clean_hashtag(text):
             if not text:
                 return "Content"
-            return ''.join(word.capitalize() for word in str(text).replace(' ', '').replace(',', '').replace('.', '') if word.isalnum())[:20]
+            return "".join(
+                word.capitalize()
+                for word in str(text).replace(" ", "").replace(",", "").replace(".", "")
+                if word.isalnum()
+            )[:20]
 
-        # Crear la firma del creador
-        creator_signature = ""
-        if creator_name:
-            creator_signature = f"\n\n---\n✍️ Creado por {creator_name}"
-
-        platform_templates = {
-            "twitter": {
-                "template": "⚡ {topic} está revolucionando {audience}!\n\n🎯 Lo que necesitas saber:\n• Impacto inmediato\n• Resultados medibles\n• Innovación constante\n\n¿Qué opinas? 👇\n\n#{topic_hashtag} #Innovation #MetaStyle{creator_signature}",
-                "emoji": "🐦"
+        topic_hashtag = clean_hashtag(topic)
+        
+        # Demo templates by platform and language
+        templates = {
+            "es": {
+                "twitter": f"🚀 Descubre todo sobre {topic}! Perfecto para {audience} que buscan innovar. ¿Qué opinas? 💭 #{topic_hashtag} #Innovation #Marketing",
+                "blog": f"# Todo lo que necesitas saber sobre {topic}\n\n¿Te has preguntado cómo {topic} puede transformar tu estrategia? En este artículo exploramos las mejores prácticas para {audience}.\n\n✨ Descubre técnicas probadas\n🎯 Estrategias efectivas\n📈 Resultados medibles\n\n#{topic_hashtag} #Blog #Estrategia",
+                "instagram": f"✨ {topic} está revolucionando la forma en que {audience} trabajan! 🚀\n\n💡 Tips clave:\n• Innovación constante\n• Resultados medibles\n• Estrategia clara\n\n¿Cuál es tu experiencia? ¡Compártela en comentarios! 👇\n\n#{topic_hashtag} #Instagram #Innovation #Success #Marketing #Business",
+                "linkedin": f"La importancia de {topic} en el desarrollo profesional de {audience}\n\nEn el panorama actual, dominar {topic} se ha vuelto fundamental para el crecimiento profesional. Las organizaciones líderes están adoptando estas estrategias para:\n\n✅ Mejorar la eficiencia\n✅ Impulsar la innovación\n✅ Generar resultados sostenibles\n\n¿Cómo está implementando tu organización estas prácticas?\n\n#{topic_hashtag} #LinkedIn #Professional #Business #Innovation"
             },
-            "blog": {
-                "template": "# {topic}: El futuro de {audience}\n\n💡 En el ecosistema digital actual, {topic} no es solo una tendencia: es una revolución que está redefiniendo cómo {audience} interact úa con la tecnología.\n\n## 🚀 Impacto transformador\n\nLos últimos datos muestran un crecimiento exponencial en {topic}. Esta transformación va más allá de simples mejoras: representa un cambio fundamental en...\n\n✨ **Key insights que debes conocer**{creator_signature}",
-                "emoji": "📝"
+            "en": {
+                "twitter": f"🚀 Discover everything about {topic}! Perfect for {audience} looking to innovate. What do you think? 💭 #{topic_hashtag} #Innovation #Marketing",
+                "blog": f"# Everything you need to know about {topic}\n\nHave you wondered how {topic} can transform your strategy? In this article we explore best practices for {audience}.\n\n✨ Discover proven techniques\n🎯 Effective strategies\n📈 Measurable results\n\n#{topic_hashtag} #Blog #Strategy",
+                "instagram": f"✨ {topic} is revolutionizing how {audience} work! 🚀\n\n💡 Key tips:\n• Constant innovation\n• Measurable results\n• Clear strategy\n\nWhat's your experience? Share in comments! 👇\n\n#{topic_hashtag} #Instagram #Innovation #Success #Marketing #Business",
+                "linkedin": f"The importance of {topic} in professional development for {audience}\n\nIn today's landscape, mastering {topic} has become fundamental for professional growth. Leading organizations are adopting these strategies to:\n\n✅ Improve efficiency\n✅ Drive innovation\n✅ Generate sustainable results\n\nHow is your organization implementing these practices?\n\n#{topic_hashtag} #LinkedIn #Professional #Business #Innovation"
             },
-            "instagram": {
-                "template": "✨ {topic} para {audience} ✨\n\n🎯 Game-changing tips:\n\n1️⃣ Empieza con bases sólidas\n2️⃣ Consistencia = Resultados\n3️⃣ Adapta según datos\n4️⃣ Mide, optimiza, repite\n\n💫 ¿Cuál implementas hoy?\n\n#{topic_hashtag} #MetaStyle #Growth #Innovation{creator_signature}",
-                "emoji": "📸"
+            "fr": {
+                "twitter": f"🚀 Découvrez tout sur {topic}! Parfait pour {audience} qui cherchent à innover. Qu'en pensez-vous? 💭 #{topic_hashtag} #Innovation #Marketing",
+                "blog": f"# Tout ce que vous devez savoir sur {topic}\n\nVous êtes-vous déjà demandé comment {topic} peut transformer votre stratégie? Dans cet article, nous explorons les meilleures pratiques pour {audience}.\n\n✨ Découvrez des techniques éprouvées\n🎯 Stratégies efficaces\n📈 Résultats mesurables\n\n#{topic_hashtag} #Blog #Stratégie",
+                "instagram": f"✨ {topic} révolutionne la façon dont {audience} travaillent! 🚀\n\n💡 Conseils clés:\n• Innovation constante\n• Résultats mesurables\n• Stratégie claire\n\nQuelle est votre expérience? Partagez en commentaires! 👇\n\n#{topic_hashtag} #Instagram #Innovation #Success #Marketing #Business",
+                "linkedin": f"L'importance de {topic} dans le développement professionnel pour {audience}\n\nDans le paysage actuel, maîtriser {topic} est devenu fondamental pour la croissance professionnelle. Les organisations leaders adoptent ces stratégies pour:\n\n✅ Améliorer l'efficacité\n✅ Stimuler l'innovation\n✅ Générer des résultats durables\n\nComment votre organisation met-elle en œuvre ces pratiques?\n\n#{topic_hashtag} #LinkedIn #Professional #Business #Innovation"
             },
-            "linkedin": {
-                "template": "🚀 Reflexiones sobre {topic} en el contexto profesional\n\nComo comunidad de {audience}, debemos mantenernos a la vanguardia de {topic}.\n\n💡 Insights clave:\n\n🔹 Adaptación continua es fundamental\n🔹 La innovación estratégica genera valor\n🔹 Colaboración efectiva multiplica resultados\n🔹 El impacto en productividad es medible\n\n¿Qué estrategias han funcionado en tu experiencia?\n\n#{topic_hashtag} #MetaStyle #ProfessionalGrowth #Leadership{creator_signature}",
-                "emoji": "💼"
+            "de": {
+                "twitter": f"🚀 Entdecken Sie alles über {topic}! Perfekt für {audience}, die innovieren möchten. Was denken Sie? 💭 #{topic_hashtag} #Innovation #Marketing",
+                "blog": f"# Alles was Sie über {topic} wissen müssen\n\nHaben Sie sich jemals gefragt, wie {topic} Ihre Strategie transformieren kann? In diesem Artikel erkunden wir bewährte Praktiken für {audience}.\n\n✨ Entdecken Sie bewährte Techniken\n🎯 Effektive Strategien\n📈 Messbare Ergebnisse\n\n#{topic_hashtag} #Blog #Strategie",
+                "instagram": f"✨ {topic} revolutioniert die Art, wie {audience} arbeiten! 🚀\n\n💡 Wichtige Tipps:\n• Konstante Innovation\n• Messbare Ergebnisse\n• Klare Strategie\n\nWas ist Ihre Erfahrung? Teilen Sie in den Kommentaren! 👇\n\n#{topic_hashtag} #Instagram #Innovation #Success #Marketing #Business",
+                "linkedin": f"Die Bedeutung von {topic} in der beruflichen Entwicklung für {audience}\n\nIn der heutigen Landschaft ist die Beherrschung von {topic} für das berufliche Wachstum von grundlegender Bedeutung geworden. Führende Organisationen setzen diese Strategien ein, um:\n\n✅ Effizienz zu verbessern\n✅ Innovation voranzutreiben\n✅ Nachhaltige Ergebnisse zu erzielen\n\nWie setzt Ihre Organisation diese Praktiken um?\n\n#{topic_hashtag} #LinkedIn #Professional #Business #Innovation"
+            },
+            "it": {
+                "twitter": f"🚀 Scopri tutto su {topic}! Perfetto per {audience} che vogliono innovare. Cosa ne pensi? 💭 #{topic_hashtag} #Innovation #Marketing",
+                "blog": f"# Tutto quello che devi sapere su {topic}\n\nTi sei mai chiesto come {topic} può trasformare la tua strategia? In questo articolo esploriamo le migliori pratiche per {audience}.\n\n✨ Scopri tecniche collaudate\n🎯 Strategie efficaci\n📈 Risultati misurabili\n\n#{topic_hashtag} #Blog #Strategia",
+                "instagram": f"✨ {topic} sta rivoluzionando il modo in cui {audience} lavorano! 🚀\n\n💡 Suggerimenti chiave:\n• Innovazione costante\n• Risultati misurabili\n• Strategia chiara\n\nQual è la tua esperienza? Condividi nei commenti! 👇\n\n#{topic_hashtag} #Instagram #Innovation #Success #Marketing #Business",
+                "linkedin": f"L'importanza di {topic} nello sviluppo professionale per {audience}\n\nNel panorama attuale, padroneggiare {topic} è diventato fondamentale per la crescita professionale. Le organizzazioni leader stanno adottando queste strategie per:\n\n✅ Migliorare l'efficienza\n✅ Guidare l'innovazione\n✅ Generare risultati sostenibili\n\nCome sta implementando queste pratiche la tua organizzazione?\n\n#{topic_hashtag} #LinkedIn #Professional #Business #Innovation"
+            },
+            "pt": {
+                "twitter": f"🚀 Descubra tudo sobre {topic}! Perfeito para {audience} que procuram inovar. O que você acha? 💭 #{topic_hashtag} #Innovation #Marketing",
+                "blog": f"# Tudo o que você precisa saber sobre {topic}\n\nJá se perguntou como {topic} pode transformar sua estratégia? Neste artigo exploramos as melhores práticas para {audience}.\n\n✨ Descubra técnicas comprovadas\n🎯 Estratégias eficazes\n📈 Resultados mensuráveis\n\n#{topic_hashtag} #Blog #Estratégia",
+                "instagram": f"✨ {topic} está revolucionando a forma como {audience} trabalham! 🚀\n\n💡 Dicas importantes:\n• Inovação constante\n• Resultados mensuráveis\n• Estratégia clara\n\nQual é sua experiência? Compartilhe nos comentários! 👇\n\n#{topic_hashtag} #Instagram #Innovation #Success #Marketing #Business",
+                "linkedin": f"A importância de {topic} no desenvolvimento profissional para {audience}\n\nNo cenário atual, dominar {topic} tornou-se fundamental para o crescimento profissional. Organizações líderes estão adotando essas estratégias para:\n\n✅ Melhorar a eficiência\n✅ Impulsionar a inovação\n✅ Gerar resultados sustentáveis\n\nComo sua organização está implementando essas práticas?\n\n#{topic_hashtag} #LinkedIn #Professional #Business #Innovation"
+            },
+            "zh": {
+                "twitter": f"🚀 发现关于{topic}的一切！非常适合寻求创新的{audience}。你怎么看？💭 #{topic_hashtag} #Innovation #Marketing",
+                "blog": f"# 关于{topic}你需要知道的一切\n\n你是否想过{topic}如何改变你的策略？在这篇文章中，我们探索{audience}的最佳实践。\n\n✨ 发现经过验证的技术\n🎯 有效策略\n📈 可衡量的结果\n\n#{topic_hashtag} #Blog #策略",
+                "instagram": f"✨ {topic}正在革命性地改变{audience}的工作方式！🚀\n\n💡 关键提示：\n• 持续创新\n• 可衡量的结果\n• 清晰的策略\n\n你的经验是什么？在评论中分享！👇\n\n#{topic_hashtag} #Instagram #Innovation #Success #Marketing #Business",
+                "linkedin": f"{topic}在{audience}职业发展中的重要性\n\n在当今的环境中，掌握{topic}已经成为职业发展的基础。领先的组织正在采用这些策略来：\n\n✅ 提高效率\n✅ 推动创新\n✅ 产生可持续的结果\n\n你的组织如何实施这些实践？\n\n#{topic_hashtag} #LinkedIn #Professional #Business #Innovation"
             }
         }
+        
+        # Get template for language and platform
+        lang_templates = templates.get(language, templates["en"])
+        content = lang_templates.get(platform.lower(), lang_templates["twitter"])
+        
+        return content, f"Demo content for {platform} (Language: {language})"
 
-        template_data = platform_templates.get(platform.lower(), platform_templates["twitter"])
-        topic_hashtag = clean_hashtag(topic)
-
-        try:
-            content = template_data["template"].format(
-                topic=topic,
-                audience=audience,
-                topic_hashtag=topic_hashtag,
-                creator_signature=creator_signature
-            )
-        except KeyError:
-            content = f"⚡ Contenido sobre {topic} para {audience}\n\nEste es contenido optimizado para {platform} con tono {tone} y estilo Meta.\n\n#{topic_hashtag} #MetaStyle #Content{creator_signature}"
-
-        return content, f"✅ Contenido demo para {platform} {template_data['emoji']}"
-
-    def generate_scientific_content_multilang(self, query, target_lang=None):
-        """Función para generar contenido científico multiidioma"""
-        try:
-            base_content = generate_scientific_content(query)
-            if not target_lang:
-                target_lang = st.session_state.get("selected_language", "en")
-
-            # Si hay DeepL configurado y el idioma no es inglés, traducir
-            import dotenv
-            env_vars = {}
-            try:
-                env_vars = dotenv.dotenv_values(".env")
-            except Exception:
-                pass
-                
-            deepl_api_key = env_vars.get("DEEPL_API_KEY", "")
-            if deepl_api_key and target_lang != "en":
-                try:
-                    from deep_translator import DeeplTranslator
-                    translated = DeeplTranslator(api_key=deepl_api_key).translate(
-                        text=base_content, target_lang=target_lang.upper()
-                    )
-                    return translated
-                except Exception as e:
-                    return base_content + f"\n\n[Error de traducción: {str(e)}]"
-            else:
-                return base_content
-        except Exception as e:
-            return f"❌ Error generando contenido científico: {str(e)}"
-
-## frontend/main.py - PARTE 4: SESSION STATE Y SIDEBAR
 
 # ===============================
-# INICIALIZAR SESSION STATE
+# INITIALIZE SESSION STATE
 # ===============================
 
-if 'content_generator' not in st.session_state:
+if "content_generator" not in st.session_state:
     st.session_state.content_generator = ContentGenerator()
-if 'generated_content' not in st.session_state:
+if "generated_content" not in st.session_state:
     st.session_state.generated_content = None
-if 'selected_platform' not in st.session_state:
+if "selected_platform" not in st.session_state:
     st.session_state.selected_platform = "Twitter"
-if 'scientific_content' not in st.session_state:
-    st.session_state.scientific_content = None
-
-# Inicializar el agente de contenido visual si está disponible
-if 'content_visual_agent' not in st.session_state:
-    if ContentVisualAgent:
-        try:
-            default_workflow_file = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)),
-                "data",
-                "examples",
-                "flujo-imagen-post.json"
-            )
-
-            if os.path.exists(default_workflow_file):
-                st.session_state.content_visual_agent = ContentVisualAgent(workflow_file=default_workflow_file)
-                st.session_state.has_content_visual_agent = True
-            else:
-                alt_workflow_file = os.path.join(os.getcwd(), "data", "examples", "flujo-imagen-post.json")
-                if os.path.exists(alt_workflow_file):
-                    st.session_state.content_visual_agent = ContentVisualAgent(workflow_file=alt_workflow_file)
-                    st.session_state.has_content_visual_agent = True
-                else:
-                    st.session_state.content_visual_agent = ContentVisualAgent()
-                    st.session_state.has_content_visual_agent = True
-                    st.warning("⚠️ No se encontró el archivo de flujo de trabajo para ComfyUI.")
-        except Exception as e:
-            st.session_state.has_content_visual_agent = False
-    else:
-        st.session_state.has_content_visual_agent = False
+if "selected_language" not in st.session_state:
+    st.session_state.selected_language = "es"
 
 # ===============================
-# INTERFAZ PRINCIPAL
+# MAIN INTERFACE
 # ===============================
 
-# Header estilo Meta
+# Hero Section
 st.markdown("""
-<div class="meta-header fade-in-up">
-    <h1>⚡ ContentAI Pro</h1>
-    <p>✨ Únete a ContentAI Pro y transforma tu contenido:  
-De tweets virales a artículos científicos con RAG.</p>
-    <p>Todo en una sola.</p>
+<div class="hero-section">
+    <h1>🧠 Generador de Contenido IA</h1>
+    <p>Crea contenido atractivo y optimizado para cualquier plataforma con inteligencia artificial</p>
 </div>
 """, unsafe_allow_html=True)
 
-# Sidebar mejorado estilo Meta
+# Sidebar for configuration
 with st.sidebar:
-    st.markdown("### ⚙️ Configuración")
-
-    # Multi-language selector estilo Meta
-    st.markdown("#### 🌐 Idioma")
-    supported_languages = {
-        "es": "🇪🇸 Español",
-        "en": "🇺🇸 English",
-        "fr": "🇫🇷 Français",
-        "de": "🇩🇪 Deutsch",
-        "zh": "🇨🇳 中文",
-        "pt": "🇧🇷 Português"
-    }
-    selected_lang = st.selectbox(
-        "Selecciona idioma",
-        options=list(supported_languages.keys()),
-        format_func=lambda k: supported_languages[k],
-        index=0,
-        key="language_selector"
-    )
-    st.session_state.selected_language = selected_lang
-
-    # Selección de modelo IA estilo Meta
-    st.markdown("#### 🤖 Motor de IA")
+    st.markdown("#### 📊 API Configuration & Status")
     
-    ai_models = [
-        "Demo Inteligente",
-        "Groq Llama3 (Gratis)",
-        "OpenAI GPT-3.5",
-        "Ollama Local"
-    ]
-
-    # Añadir la opción de LM Studio + ComfyUI si está disponible
-    if st.session_state.get("has_content_visual_agent", False):
-        ai_models.append("LM Studio + ComfyUI")
-
-    ai_model = st.radio(
-        "Selecciona el motor",
-        ai_models,
-        help="Elige el motor de IA para generar contenido",
-        key="ai_model_selector"
-    )
-
-    # Configuración de APIs estilo Meta
-    st.markdown("#### 🔑 APIs")
-
-    # Cargar variables de entorno
-    import dotenv
+    # Load environment variables and show their status
     env_vars = {}
     try:
-        env_vars = dotenv.dotenv_values(".env")
-    except Exception:
-        pass
+        # Force reload environment variables
+        dotenv.load_dotenv(override=True)
+        env_vars = {
+            "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY", ""),
+            "GROQ_API_KEY": os.getenv("GROQ_API_KEY", ""), 
+            "UNSPLASH_ACCESS_KEY": os.getenv("UNSPLASH_ACCESS_KEY", ""),  # Note: using UNSPLASH_ACCESS_KEY
+            "DEEPL_API_KEY": os.getenv("DEEPL_API_KEY", ""),
+            "HUGGINGFACE_API_KEY": os.getenv("HUGGINGFACE_API_KEY", ""),
+            "LANGSMITH_API_KEY": os.getenv("LANGSMITH_API_KEY", ""),
+        }
+        
+        # Debug: Print loaded values (masked)
+        st.write("**🔍 Debug - Environment Variables:**")
+        for key, value in env_vars.items():
+            masked_value = f"{value[:8]}...{value[-4:]}" if len(value) > 12 else "***"
+            status = "✅" if value else "❌"
+            st.write(f"{status} {key}: {masked_value if value else 'Not found'}")
+            
+    except Exception as e:
+        st.error(f"Error loading .env: {str(e)}")
+        st.write(f"Current working directory: {os.getcwd()}")
+        st.write(f".env file exists: {os.path.exists('.env')}")
 
-    openai_key = None
-    groq_key = None
-    unsplash_key = None
+    st.markdown("---")
 
-    # Configuración específica según modelo
-    if ai_model == "Groq Llama3 (Gratis)":
-        st.markdown("##### 🚀 Groq Configuration")
-        groq_key = st.text_input(
-            "API Key",
-            value=env_vars.get("GROQ_API_KEY", ""),
-            type="password",
-            placeholder="gsk_...",
-            help="Obtén tu key gratuita en console.groq.com",
-            key="groq_api_input"
-        )
-
-        if groq_key:
-            st.markdown('<div class="meta-status connected">✅ Groq configurado</div>', unsafe_allow_html=True)
-            st.info("⚡ **Ultra rápido:** 14,400 tokens/minuto gratuitos")
-        else:
-            st.markdown('<div class="meta-status disconnected">⚠️ API key requerida</div>', unsafe_allow_html=True)
-
-    elif ai_model == "OpenAI GPT-3.5":
-        st.markdown("##### 🤖 OpenAI Configuration")
-        openai_key = st.text_input(
-            "API Key",
-            value=env_vars.get("OPENAI_API_KEY", ""),
-            type="password",
-            placeholder="sk-...",
-            help="Obtén tu key en platform.openai.com/api-keys",
-            key="openai_api_input"
-        )
-
-        if openai_key:
-            st.markdown('<div class="meta-status connected">✅ OpenAI configurado</div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="meta-status disconnected">⚠️ API key requerida</div>', unsafe_allow_html=True)
-
-    # Configuración de Unsplash
-    st.markdown("#### 📸 Imágenes")
-    unsplash_key = st.text_input(
-        "🖼️ Unsplash Access Key",
-        value=env_vars.get("UNSPLASH_ACCESS_KEY", ""),
-        type="password",
-        placeholder="Tu access key...",
-        help="Obtén tu key gratuita en unsplash.com/developers",
-        key="unsplash_api_input"
+    # API key inputs with auto-filled values from .env (but masked)
+    st.markdown("**🔑 API Keys (Auto-filled from .env if available):**")
+    
+    openai_key_input = st.text_input(
+        "OpenAI API Key", 
+        type="password", 
+        value=env_vars.get("OPENAI_API_KEY", ""),
+        help="Auto-filled from OPENAI_API_KEY in .env"
+    )
+    
+    groq_key_input = st.text_input(
+        "Groq API Key", 
+        type="password", 
+        value=env_vars.get("GROQ_API_KEY", ""),
+        help="Auto-filled from GROQ_API_KEY in .env"
+    )
+    
+    unsplash_key_input = st.text_input(
+        "Unsplash API Key", 
+        type="password", 
+        value=env_vars.get("UNSPLASH_ACCESS_KEY", ""),  # Using UNSPLASH_ACCESS_KEY
+        help="Auto-filled from UNSPLASH_ACCESS_KEY in .env"
+    )
+    
+    deepl_key_input = st.text_input(
+        "DeepL API Key", 
+        type="password", 
+        value=env_vars.get("DEEPL_API_KEY", ""),
+        help="Auto-filled from DEEPL_API_KEY in .env - Used for translation"
     )
 
-    generate_images = st.checkbox(
-        "🎨 **Generar imágenes automáticamente**",
-        value=bool(unsplash_key),
-        disabled=not bool(unsplash_key),
-        help="Busca y adjunta imágenes profesionales automáticamente",
-        key="generate_images_checkbox"
-    )
-
-    if unsplash_key:
-        st.markdown('<div class="meta-status connected">✅ Unsplash activo</div>', unsafe_allow_html=True)
-        st.info("📊 **Límites:** 50 descargas/hora gratuitas")
-    else:
-        st.markdown('<div class="meta-status disconnected">📸 Opcional - mejora el contenido</div>', unsafe_allow_html=True)
-
-    # Configurar APIs en el generador
+    # Configure APIs with all keys including DeepL
     st.session_state.content_generator.configure_apis(
-        openai_key=openai_key if openai_key else None,
-        groq_key=groq_key if groq_key else None,
-        unsplash_key=unsplash_key if unsplash_key else None
+        openai_key=openai_key_input,
+        groq_key=groq_key_input,
+        unsplash_key=unsplash_key_input,
+        deepl_key=deepl_key_input,
     )
 
-    # Estado del sistema estilo Meta
-    st.markdown("### 📊 Estado del Sistema")
+    # Show API status
+    st.markdown("**📊 API Status:**")
+    generator = st.session_state.content_generator
+    
+    status_items = [
+        ("OpenAI", generator.api_configured, "🤖"),
+        ("Groq", generator.groq_configured, "⚡"),
+        ("Unsplash", generator.unsplash_configured, "📸"),
+        ("DeepL", generator.deepl_configured, "🌐"),
+    ]
+    
+    for name, configured, icon in status_items:
+        status = "✅ Ready" if configured else "❌ Not configured"
+        color = "api-configured" if configured else "api-not-configured"
+        st.markdown(f'<div class="api-status {color}">{icon} {name}: {status}</div>', unsafe_allow_html=True)
 
-    status_indicators = {
-        "Demo Inteligente": ("🎯", "Demo Activo", "connected"),
-        "Groq Llama3 (Gratis)": ("🚀" if st.session_state.content_generator.groq_configured else "⏸️", 
-                                 "Groq Ultra-Rápido" if st.session_state.content_generator.groq_configured else "Groq Desconectado",
-                                 "connected" if st.session_state.content_generator.groq_configured else "disconnected"),
-        "OpenAI GPT-3.5": ("🤖" if st.session_state.content_generator.api_configured else "⏸️",
-                           "OpenAI Activo" if st.session_state.content_generator.api_configured else "OpenAI Desconectado",
-                           "connected" if st.session_state.content_generator.api_configured else "disconnected"),
-        "Ollama Local": ("🏠", "Ollama Local", "disconnected"),
-        "LM Studio + ComfyUI": ("🎨" if st.session_state.get("has_content_visual_agent", False) else "⏸️",
-                               "LM Studio + ComfyUI Activo" if st.session_state.get("has_content_visual_agent", False) else "LM Studio + ComfyUI Desconectado",
-                               "connected" if st.session_state.get("has_content_visual_agent", False) else "disconnected")
+    # Language selection
+    # Language selection with more options
+    supported_languages = {
+        "es": "🇪🇸 Español",
+        "en": "🇺🇸 English", 
+        "fr": "🇫🇷 Français",
+        "de": "🇩🇪 Deutsch",
+        "it": "🇮🇹 Italiano",
+        "pt": "🇵🇹 Português",
+        "zh": "🇨🇳 中文 (Chinese)",
+        "ja": "🇯🇵 日本語 (Japanese)",
+        "ko": "🇰🇷 한국어 (Korean)",
+        "ru": "🇷🇺 Русский (Russian)",
+        "ar": "🇸🇦 العربية (Arabic)",
+        "hi": "🇮🇳 हिंदी (Hindi)",
+        "nl": "🇳🇱 Nederlands (Dutch)",
+        "sv": "🇸🇪 Svenska (Swedish)",
+        "da": "🇩🇰 Dansk (Danish)",
+        "no": "🇳🇴 Norsk (Norwegian)",
+        "fi": "🇫🇮 Suomi (Finnish)",
+        "pl": "🇵🇱 Polski (Polish)",
+        "cs": "🇨🇿 Čeština (Czech)",
+        "hu": "🇭🇺 Magyar (Hungarian)",
+        "tr": "🇹🇷 Türkçe (Turkish)",
+        "uk": "🇺🇦 Українська (Ukrainian)",
     }
 
-    if ai_model in status_indicators:
-        icon, text, status = status_indicators[ai_model]
-        st.markdown(f'<div class="meta-status {status}">{icon} {text}</div>', unsafe_allow_html=True)
-
-    # Estado de imágenes
-    img_status = "connected" if st.session_state.content_generator.unsplash_configured else "disconnected"
-    img_icon = "🎨" if img_status == "connected" else "📷"
-    img_text = "Imágenes Automáticas" if img_status == "connected" else "Solo Texto"
-    st.markdown(f'<div class="meta-status {img_status}">{img_icon} {img_text}</div>', unsafe_allow_html=True)
-
-    # Información de costos estilo Meta
-    st.markdown("### 💰 Costos")
-
-    cost_mapping = {
-        "Demo Inteligente": ("🆓", "Completamente gratuito", "success"),
-        "Groq Llama3 (Gratis)": ("🚀", "Gratuito + Ultra rápido", "success"),
-        "OpenAI GPT-3.5": ("💳", "~$0.002 per 1K tokens", "info"),
-        "Ollama Local": ("🏠", "Gratuito (local)", "info"),
-        "LM Studio + ComfyUI": ("🎨", "Gratuito (local)", "info")
-    }
-
-    if ai_model in cost_mapping:
-        icon, text, msg_type = cost_mapping[ai_model]
-        if msg_type == "success":
-            st.success(f"{icon} {text}")
+    selected_lang = st.selectbox(
+        "🌐 Language / Idioma",
+        options=list(supported_languages.keys()),
+        format_func=lambda k: supported_languages[k],
+        index=list(supported_languages.keys()).index(st.session_state.selected_language) if st.session_state.selected_language in supported_languages else 0
+    )
+    st.session_state.selected_language = selected_lang
+    
+    # Show language support info
+    if selected_lang != 'en':
+        if st.session_state.content_generator.deepl_configured:
+            st.success(f"✅ {supported_languages[selected_lang]} supported with AI + DeepL translation")
         else:
-            st.info(f"{icon} {text}")
+            st.info(f"ℹ️ {supported_languages[selected_lang]} supported with AI direct generation")
+            st.warning("💡 For better translation quality, configure DeepL API key")
+    else:
+        st.info("✅ English is the primary AI language (best results)")
+
+    # AI Model selection
+    st.markdown("### 🤖 AI Model")
+    
+    available_models = ["Demo Inteligente"]
+    if st.session_state.content_generator.groq_configured:
+        available_models.append("Groq Llama3 (Gratis)")
+    if st.session_state.content_generator.api_configured:
+        available_models.append("OpenAI GPT-3.5")
+    available_models.append("Ollama Local")
+    
+    ai_model = st.selectbox("Select AI Model", available_models)
+
+    # Image generation toggle
+    generate_images = st.checkbox(
+        "📸 Generate Images", 
+        value=st.session_state.content_generator.unsplash_configured,
+        disabled=not st.session_state.content_generator.unsplash_configured
+    )
+
+    # Cost information
+    st.markdown("### 💰 Costs")
+    if ai_model == "Demo Inteligente":
+        st.info("🆓 Completely free")
+    elif ai_model == "Groq Llama3 (Gratis)":
+        st.success("🚀 Free + Ultra fast")
+        st.info("14,400 tokens/minute free")
+    elif ai_model == "OpenAI GPT-3.5":
+        st.info("💸 ~$0.002 per 1K tokens")
+    elif ai_model == "Ollama Local":
+        st.info("🆓 Free (requires installation)")
 
     if st.session_state.content_generator.unsplash_configured:
-        st.info("📸 Unsplash: 50 imágenes/hora gratuitas")
+        st.info("📸 Unsplash: 50 downloads/hour free")
 
-    # Generador Científico (RAG)
-    st.markdown("### 🧬 Generador Científico")
-    scientific_query = st.text_input(
-        "🔬 Tema científico",
-        placeholder="ej: física cuántica, IA, biomedicina",
-        help="Genera contenido científico usando RAG y arXiv",
-        key="scientific_query_input"
-    )
-
-    if st.button("🧬 Generar científico", key="generate_scientific", use_container_width=True):
-        if scientific_query:
-            with st.spinner("Generando contenido científico..."):
-                scientific_result = st.session_state.content_generator.generate_scientific_content_multilang(
-                    scientific_query, st.session_state.get("selected_language", "en")
-                )
-                st.session_state.scientific_content = scientific_result
-        else:
-            st.error("Por favor, ingresa un tema científico")
-
-## frontend/main.py - PARTE 5 CORREGIDA: LAYOUT PRINCIPAL Y FUNCIONES
-
-# Layout principal estilo Meta
-col1, col2 = st.columns([2, 1], gap="large")
+# Main layout
+col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.markdown('<div class="meta-card-line">', unsafe_allow_html=True)
-    st.markdown("### 📝 Crear Contenido")
+    st.markdown("### 📝 Create Content")
 
-    with st.form("content_form", clear_on_submit=False, border=False):
+    # Main form
+    with st.form("content_form"):
+        # Topic input
         topic = st.text_input(
-            "💡 **Tema Principal**",
-            placeholder="ej: Inteligencia Artificial, Marketing Digital, Meta...",
-            help="🎯 Describe el tema central de tu contenido",
-            key="topic_input"
+            "💡 Topic",
+            placeholder="E.g: Artificial Intelligence, Digital Marketing, Productivity...",
+            help="Describe the main topic of your content",
         )
 
-        st.markdown("#### 📱 Plataforma")
-        
-        # Platform selection con estilo Meta - SIN KEY EN FORM_SUBMIT_BUTTON
+        # Platform selection with visual cards
+        st.markdown("#### 📱 Platform")
+
         platforms = [
-            {"name": "Twitter", "icon": "🐦", "desc": "Tweets concisos"},
-            {"name": "Blog", "icon": "📝", "desc": "Artículos largos"},
-            {"name": "Instagram", "icon": "📸", "desc": "Posts visuales"},
-            {"name": "LinkedIn", "icon": "💼", "desc": "Contenido pro"}
+            {"name": "Twitter", "icon": "🐦", "desc": "Concise and viral tweets"},
+            {"name": "Blog", "icon": "📝", "desc": "Informative articles"},
+            {"name": "Instagram", "icon": "📸", "desc": "Visual posts with hashtags"},
+            {"name": "LinkedIn", "icon": "💼", "desc": "Professional content"},
         ]
 
-        platform_cols = st.columns(2)
+        platform_cols = st.columns(4)
         platform_selected = None
-        
+
         for i, platform_data in enumerate(platforms):
-            col_idx = i % 2
-            with platform_cols[col_idx]:
-                # CORREGIDO: Removido el parámetro 'key' que causa error
+            with platform_cols[i]:
                 if st.form_submit_button(
-                    f"{platform_data['icon']} **{platform_data['name']}**\n{platform_data['desc']}",
-                    help=f"Optimizar para {platform_data['name']}",
-                    use_container_width=True
+                    f"{platform_data['icon']}\n{platform_data['name']}\n{platform_data['desc']}",
+                    help=f"Optimize for {platform_data['name']}",
+                    use_container_width=True,
                 ):
-                    st.session_state.selected_platform = platform_data['name']
-                    platform_selected = platform_data['name']
+                    st.session_state.selected_platform = platform_data["name"]
+                    platform_selected = platform_data["name"]
 
+        # Show selected platform
         if st.session_state.selected_platform:
-            selected_platform_data = next(p for p in platforms if p['name'] == st.session_state.selected_platform)
-            st.success(f"✅ **{selected_platform_data['icon']} {selected_platform_data['name']}** seleccionado")
+            selected_platform_data = next(
+                p for p in platforms if p["name"] == st.session_state.selected_platform
+            )
+            st.success(
+                f"✅ Selected platform: **{selected_platform_data['icon']} {selected_platform_data['name']}**"
+            )
 
-        # Configuraciones adicionales
-        col_a, col_b, col_c = st.columns(3)
+        # Additional inputs
+        col_a, col_b = st.columns(2)
 
         with col_a:
             audience = st.text_input(
-                "🎯 **Audiencia**",
-                placeholder="emprendedores, developers...",
-                help="👥 Define tu audiencia objetivo",
-                key="audience_input"
+                "🎯 Audience",
+                placeholder="E.g: teenagers, marketers, entrepreneurs...",
+                help="Define your target audience",
             )
 
         with col_b:
             tone = st.selectbox(
-                "🎭 **Tono**",
-                ["profesional", "casual", "inspiracional", "técnico", "divertido", "educativo"],
-                help="🗣️ Estilo de comunicación",
-                key="tone_selector"
+                "🎭 Tone",
+                ["profesional", "casual", "divertido", "inspiracional", "educativo"],
+                help="Select the content tone",
             )
 
-        with col_c:
-            creator_name = st.text_input(
-                "✍️ **Creado por**",
-                placeholder="Tu nombre...",
-                help="👤 Firma del creador",
-                key="creator_input"
-            )
+        # Generation button
+        generate_button = st.form_submit_button("🚀 Generate Content", type="primary")
 
-        # Botón principal de generación
-        generate_button = st.form_submit_button(
-            "⚡ **Generar Contenido**",
-            type="primary",
-            use_container_width=True
-        )
-
-        # Lógica de generación
+        # Generation logic
         if generate_button:
             if not topic:
-                st.error("⚠️ **Ingresa un tema**")
+                st.error("⚠️ Please enter a topic")
             elif not st.session_state.selected_platform:
-                st.error("⚠️ **Selecciona una plataforma**")
+                st.error("⚠️ Please select a platform")
             else:
-                # Progreso estilo Meta
+                # Show progress
                 progress_container = st.container()
-                
+
                 with progress_container:
-                    st.markdown("### 🤖 Procesando...")
-                    
+                    st.markdown("### 🤖 Generating content...")
+
                     progress_bar = st.progress(0)
                     status_text = st.empty()
 
+                    # Process steps
                     steps = [
-                        ("🧠 **Analizando tema...**", 20),
-                        ("🎯 **Optimizando plataforma...**", 40),
-                        ("✍️ **Generando contenido...**", 60),
-                        ("🖼️ **Buscando imagen...**" if generate_images else "🎨 **Aplicando estilo...**", 80),
-                        ("✅ **¡Listo!**", 100)
+                        ("🧠 Analyzing topic and audience...", 20),
+                        ("✍️ Generating optimized content...", 40),
+                        (("🖼️ Searching for perfect image..." if generate_images else "🎨 Applying platform style..."), 60),
+                        ("🎨 Finalizing optimization...", 80),
+                        ("✅ Content ready!", 100),
                     ]
 
                     for step_text, progress in steps:
-                        status_text.markdown(f'<div class="meta-card" style="padding: 1rem; margin: 0.5rem 0;">{step_text}</div>', unsafe_allow_html=True)
+                        status_text.markdown(
+                            f'<div class="progress-step">{step_text}</div>',
+                            unsafe_allow_html=True,
+                        )
                         progress_bar.progress(progress)
-                        time.sleep(0.5)
+                        time.sleep(0.8)
 
+                    # Generate content according to selected model
                     generator = st.session_state.content_generator
                     platform = st.session_state.selected_platform
+                    language = st.session_state.selected_language
 
-                    # Generar según modelo seleccionado
                     if ai_model == "Groq Llama3 (Gratis)" and generator.groq_configured:
-                        content, status = generator.generate_with_groq(topic, platform, audience, tone, creator_name)
+                        content, status = generator.generate_with_groq(
+                            topic, platform, audience, tone, language
+                        )
                     elif ai_model == "OpenAI GPT-3.5" and generator.api_configured:
-                        content, status = generator.generate_with_openai(topic, platform, audience, tone, creator_name)
+                        content, status = generator.generate_with_openai(
+                            topic, platform, audience, tone, language
+                        )
                     elif ai_model == "Ollama Local":
-                        content, status = generator.generate_with_ollama(topic, platform, audience, tone, creator_name)
-                    elif ai_model == "LM Studio + ComfyUI" and st.session_state.get("has_content_visual_agent", False):
-                        content, status = generator.generate_with_lmstudio_comfyui(topic, platform, audience, tone)
+                        content, status = generator.generate_with_ollama(
+                            topic, platform, audience, tone, language
+                        )
                     else:  # Demo Inteligente
                         content, status = generator.generate_demo_content(
-                            topic, platform, audience, tone, creator_name, st.session_state.get("selected_language", "es")
+                            topic, platform, audience, tone, language
                         )
 
-                    # Buscar imagen si está habilitado
+                    # Search for Unsplash image if configured
                     image_data = None
                     image_status = ""
-                    
+                    search_keyword_used = ""
+
                     if generate_images and generator.unsplash_configured and content:
-                        status_text.markdown('<div class="meta-card" style="padding: 1rem;">🧠 **Analizando para imagen...**</div>', unsafe_allow_html=True)
-                        image_data, image_status = generator.search_unsplash_image_intelligent(
-                            content=content, topic=topic, platform=platform
+                        status_text.markdown(
+                            '<div class="progress-step">🧠 Analyzing content to find perfect image...</div>',
+                            unsafe_allow_html=True,
                         )
 
+                        # Use intelligent search
+                        image_data, image_status = generator.search_unsplash_image_intelligent(
+                            content=content,
+                            topic=topic,
+                            platform=platform,
+                        )
+
+                        if image_data:
+                            search_keyword_used = "Intelligent content analysis"
+                        else:
+                            search_keyword_used = "No results found"
+
                     if content:
-                        # Guardar resultado
+                        # Save result
                         result_data = {
-                            'topic': topic,
-                            'platform': platform,
-                            'audience': audience,
-                            'tone': tone,
-                            'creator_name': creator_name,
-                            'content': content,
-                            'status': status,
-                            'model': ai_model,
-                            'image_data': image_data,
-                            'image_status': image_status,
-                            'timestamp': datetime.now(),
-                            'word_count': len(str(content).split()),
-                            'char_count': len(str(content)),
-                            'hashtags': len([word for word in str(content).split() if word.startswith('#')])
+                            "topic": topic,
+                            "platform": platform,
+                            "audience": audience,
+                            "tone": tone,
+                            "language": language,
+                            "content": content,
+                            "status": status,
+                            "model": ai_model,
+                            "image_data": image_data,
+                            "image_status": image_status,
+                            "search_keyword_used": search_keyword_used,
+                            "timestamp": datetime.now(),
                         }
 
                         st.session_state.generated_content = result_data
-                        status_text.success("✅ **¡Contenido generado!**")
+
+                        status_text.success("✅ Content generated successfully!")
                         progress_bar.empty()
                         st.balloons()
                     else:
-                        status_text.error(f"❌ **Error:** {status}")
+                        status_text.error(f"❌ Error: {status}")
                         progress_bar.empty()
 
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Panel lateral con tips estilo Meta
 with col2:
-    st.markdown('<div class="meta-card-line">', unsafe_allow_html=True)
-    st.markdown("### 💡 Tips Style")
+    st.markdown("### 💡 Suggestions")
 
+    # Dynamic tips according to platform
     platform_tips = {
-        "Twitter": {
-            "icon": "🐦",
-            "tip": "Máximo 280 caracteres",
-            "points": [
-                "Usa hashtags trending",
-                "Incluye pregunta para engagement", 
-                "Emojis aumentan visibilidad",
-                "Menciona usuarios relevantes"
-            ]
-        },
-        "Blog": {
-            "icon": "📝", 
-            "tip": "Estructura clara y SEO optimized",
-            "points": [
-                "Subtítulos para mejor UX",
-                "Listas y bullet points",
-                "Call-to-action claro",
-                "Keywords estratégicas"
-            ]
-        },
-        "Instagram": {
-            "icon": "📸",
-            "tip": "Visual-first content",
-            "points": [
-                "Hasta 30 hashtags relevantes",
-                "Stories y Reels prioritarios",
-                "Ubicación para discovery",
-                "Horarios de mayor actividad"
-            ]
-        },
-        "LinkedIn": {
-            "icon": "💼",
-            "tip": "Valor profesional y networking",
-            "points": [
-                "Insights de la industria",
-                "Tono profesional accesible",
-                "Experiencias personales",
-                "Preguntas para discusión"
-            ]
-        }
+        "Twitter": "🐦 Keep the message concise and use trending hashtags",
+        "Blog": "📝 Include attractive titles and clear structure",
+        "Instagram": "📸 Use eye-catching emojis and popular hashtags",
+        "LinkedIn": "💼 Focus on professional value and networking",
     }
 
-    current_platform = st.session_state.selected_platform
-    if current_platform in platform_tips:
-        tip_data = platform_tips[current_platform]
-        st.markdown(f"#### {tip_data['icon']} {current_platform}")
-        st.info(f"**💡 {tip_data['tip']}**")
-        
-        st.markdown("**📋 Best practices:**")
-        for point in tip_data['points']:
-            st.markdown(f"• {point}")
-    else:
-        st.info("💡 Selecciona una plataforma para tips específicos")
+    current_tip = platform_tips.get(
+        st.session_state.selected_platform,
+        "💡 Select a platform to see specific tips",
+    )
+    st.info(current_tip)
 
-    st.markdown("#### 📄 Templates Rápidos")
+    # Quick templates
+    st.markdown("#### 📄 Quick Templates")
+
     quick_topics = [
-        {"text": "Meta AI Updates", "emoji": "🤖"},
-        {"text": "Productivity Hacks", "emoji": "⚡"},
-        {"text": "Tech Innovation", "emoji": "🚀"},
-        {"text": "Digital Strategy", "emoji": "📈"},
-        {"text": "Meta Ads Tips", "emoji": "🎯"}
+        "🔥 Trends 2025",
+        "💡 Productivity tips",
+        "🚀 Tech innovation",
+        "📈 Growth strategies",
+        "🎯 Effective marketing",
     ]
 
-    for topic_data in quick_topics:
-        # CORREGIDO: Cambiado button por checkbox para evitar conflictos
-        if st.checkbox(
-            f"{topic_data['emoji']} {topic_data['text']}",
-            key=f"quick_{topic_data['text'].replace(' ', '_')}",
-            help=f"Usar '{topic_data['text']}' como tema"
+    for topic_template in quick_topics:
+        if st.button(
+            topic_template, use_container_width=True, key=f"template_{topic_template}"
         ):
-            st.info(f"💡 **{topic_data['text']}** seleccionado")
+            # Auto-fill the topic (this would need to be implemented in the form)
+            st.session_state.quick_topic = topic_template.split(" ", 1)[1]  # Remove emoji
 
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Mostrar contenido generado estilo Meta
+# Show generated content
 if st.session_state.generated_content:
     content_data = st.session_state.generated_content
 
     st.markdown("---")
-    st.markdown("### 📊 Contenido Generado")
+    st.markdown("### 📊 Generated Content")
 
-    # Métricas estilo Meta
-    col1, col2, col3, col4, col5 = st.columns(5)
-
-    metrics = [
-        ("📱", content_data['platform'], "Plataforma"),
-        ("🤖", content_data['model'].split()[0], "Motor IA"),
-        ("📝", f"{content_data['char_count']:,}", "Caracteres"),
-        ("📊", f"{content_data['word_count']:,}", "Palabras"),
-        ("#️⃣", content_data.get('hashtags', 0), "Hashtags")
-    ]
-
-    for i, (icon, value, label) in enumerate(metrics):
-        with [col1, col2, col3, col4, col5][i]:
-            st.markdown(f"""
-            <div class="meta-metric">
-                <div style="font-size: 1.5rem; margin-bottom: 0.25rem;">{icon}</div>
-                <div class="meta-metric-value">{value}</div>
-                <div class="meta-metric-label">{label}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-    # Contenido principal
-    st.markdown(f"""
-    <div class="meta-card">
-        <h4>🎯 Contenido para {content_data['platform']}</h4>
-        <div class="meta-content-preview">
-            {content_data['content'].replace(chr(10), '<br>')}
-        </div>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem; color: var(--meta-gray-500); font-size: 0.875rem;">
-            <span>✨ {content_data['status']}</span>
-            <span>🕒 {content_data['timestamp'].strftime('%H:%M:%S')}</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Mostrar imagen si existe
-    if content_data.get('image_data'):
-        st.markdown("#### 📸 Imagen Profesional")
-        
-        image_data = content_data['image_data']
-        col_img1, col_img2 = st.columns([3, 2])
-
-        with col_img1:
-            st.image(
-                image_data['url'],
-                caption=f"📷 Foto por {image_data['author']} en Unsplash",
-                use_container_width=True
-            )
-
-        with col_img2:
-            st.markdown('<div class="meta-card">', unsafe_allow_html=True)
-            st.markdown("**🎨 Detalles:**")
-            st.markdown(f"**👤 Autor:** [{image_data['author']}]({image_data['author_url']})")
-            
-            if image_data['description']:
-                st.markdown(f"**📝 Desc:** {image_data['description'][:80]}{'...' if len(image_data['description']) > 80 else ''}")
-            
-            st.markdown(f"**📐 Tamaño:** {image_data.get('width', 'N/A')} × {image_data.get('height', 'N/A')}")
-            
-            if st.button("📥 **Descargar**", use_container_width=True, key="download_img"):
-                st.success("✅ **Lista para descargar**")
-                st.info("💡 Clic derecho → 'Guardar imagen como...'")
-            st.markdown('</div>', unsafe_allow_html=True)
-
-    elif content_data.get('image_path') and os.path.exists(content_data['image_path']):
-        st.markdown("#### 🎨 Imagen ComfyUI")
-        
-        col_img1, col_img2 = st.columns([3, 2])
-        
-        with col_img1:
-            st.image(
-                content_data['image_path'],
-                caption="🖼️ Generada con IA",
-                use_container_width=True
-            )
-        
-        with col_img2:
-            st.markdown('<div class="meta-card">', unsafe_allow_html=True)
-            st.markdown("**🎨 Detalles:**")
-            st.markdown("**🤖 Motor:** ComfyUI")
-            if content_data.get('image_prompt'):
-                st.markdown(f"**📝 Prompt:** {content_data['image_prompt'][:80]}{'...' if len(content_data.get('image_prompt', '')) > 80 else ''}")
-            st.markdown(f"**📊 Estado:** {content_data.get('image_status', 'Generada con éxito')}")
-            
-            if st.button("📥 **Descargar**", use_container_width=True, key="download_comfy"):
-                st.success("✅ **Lista para descargar**")
-            st.markdown('</div>', unsafe_allow_html=True)
-
-    # Botones de acción estilo Meta
-    st.markdown("#### 🛠️ Acciones")
-    
+    # Metrics
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        if st.button("📋 **Copiar**", use_container_width=True, key="copy_content"):
-            st.success("✅ **Copiado!**")
-            st.code(content_data['content'], language=None)
+        st.metric("Platform", content_data["platform"])
+    with col2:
+        st.metric("AI Model", content_data["model"].split()[0])
+    with col3:
+        st.metric("Characters", len(content_data["content"]))
+    with col4:
+        st.metric("Words", len(content_data["content"].split()))
+
+    # Final content
+    st.markdown(
+        f"""
+    <div class="generated-content">
+        <h4>🎯 Content for {content_data['platform']} ({content_data.get('language', 'es')})</h4>
+        <div style="background: white; padding: 1.5rem; border-radius: 8px; margin: 1rem 0; border: 1px solid #e1e5e9;">
+            {content_data['content'].replace(chr(10), '<br>')}
+        </div>
+        <small>✨ {content_data['status']}</small>
+    </div>
+    """,
+        unsafe_allow_html=True,
+    )
+
+    # Show Unsplash image if exists
+    if content_data.get("image_data"):
+        st.markdown("#### 📸 Unsplash Image")
+
+        image_data = content_data["image_data"]
+
+        col_img1, col_img2 = st.columns([2, 1])
+
+        with col_img1:
+            st.image(
+                image_data["url"],
+                caption=f"📷 Photo by {image_data['author']} on Unsplash",
+                use_column_width=True,
+            )
+
+        with col_img2:
+            st.markdown("**Image Details:**")
+            st.write(f"**Author:** [{image_data['author']}]({image_data['author_url']})")
+            if image_data["description"]:
+                st.write(f"**Description:** {image_data['description'][:100]}...")
+            st.write(f"**Status:** {content_data.get('image_status', 'Image found')}")
+
+            # Download button
+            if st.button("📥 Download Original Image", use_container_width=True):
+                st.info("💡 Right-click on the image and select 'Save image as...'")
+
+    elif content_data.get("image_status"):
+        st.markdown("#### 📸 Image Status")
+        if "No results" in content_data["image_status"]:
+            st.warning(f"⚠️ {content_data['image_status']}")
+            st.info("💡 Try with a more specific topic or verify your Unsplash API key")
+        else:
+            st.info(f"ℹ️ {content_data['image_status']}")
+
+    # Action buttons
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        if st.button("📋 Copy Content", use_container_width=True):
+            st.success("✅ Content copied!")
+            st.code(content_data["content"])
 
     with col2:
-        if st.button("🔄 **Regenerar**", use_container_width=True, key="regenerate"):
+        if st.button("🔄 Regenerate", use_container_width=True):
             st.session_state.generated_content = None
-            st.info("🔄 **Listo para nueva versión**")
-            st.rerun()
+            st.info("🔄 Click 'Generate Content' to create a new version")
 
     with col3:
-        if st.button("📊 **Analizar**", use_container_width=True, key="analyze"):
+        if st.button("📤 Share", use_container_width=True):
+            st.info("📤 Share function coming soon")
+
+    # Show process details
+    with st.expander("🔍 View Process Details"):
+        st.markdown(
+            f"""
+        **📝 Parameters used:**
+        - **Topic:** {content_data['topic']}
+        - **Platform:** {content_data['platform']}
+        - **Audience:** {content_data['audience']}
+        - **Tone:** {content_data['tone']}
+        - **Language:** {content_data.get('language', 'es')}
+        - **Model:** {content_data['model']}
+        - **Timestamp:** {content_data['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}
+        
+        **📸 Image information:**
+        - **Status:** {content_data.get('image_status', 'No image')}
+        - **Method:** {content_data.get('search_keyword_used', 'N/A')}
+        - **Source:** {"Unsplash" if content_data.get('image_data') else "Not applicable"}
+        """
+        )
+
+        # Show intelligent keyword analysis
+        if st.button("🧠 View Keyword Analysis", key="show_analysis"):
             generator = st.session_state.content_generator
             if generator.unsplash_configured:
                 try:
                     extracted_concepts = generator.extract_visual_concepts_from_content(
-                        content_data['content'], content_data['topic']
+                        content_data["content"], content_data["topic"]
                     )
-                    st.success(f"🎯 **Conceptos:** {extracted_concepts}")
+                    st.success(f"🎯 **Automatically extracted concepts:** {extracted_concepts}")
+                    st.info("💡 These concepts are generated by analyzing real content, not using static dictionaries")
                 except Exception as e:
-                    st.error(f"Error: {str(e)}")
+                    st.error(f"Analysis error: {str(e)}")
             else:
-                st.info("📊 **Análisis básico disponible**")
+                st.warning("⚠️ Configure Unsplash to see intelligent analysis")
 
-    with col4:
-        # Exportar datos
-        export_data = f"""# Contenido Meta Style - {content_data['platform']}
+        if content_data.get("image_data"):
+            image_data = content_data["image_data"]
+            st.markdown(
+                f"""
+            **🖼️ Unsplash image details:**
+            - **Author:** {image_data['author']}
+            - **Description:** {image_data.get('description', 'No description')}
+            - **Resolution:** {image_data.get('width', 'N/A')} x {image_data.get('height', 'N/A')}
+            - **URL:** [View on Unsplash]({image_data['author_url']})
+            """
+            )
 
-**Tema:** {content_data['topic']}
-**Audiencia:** {content_data['audience']}
-**Tono:** {content_data['tone']}
-**Creador:** {content_data.get('creator_name', 'No especificado')}
-**Fecha:** {content_data['timestamp'].strftime('%Y-%m-%d %H:%M')}
-**Motor:** {content_data['model']}
-
-## Estadísticas:
-- **Caracteres:** {content_data['char_count']}
-- **Palabras:** {content_data['word_count']}
-- **Hashtags:** {content_data.get('hashtags', 0)}
-
-## Contenido:
-
-{content_data['content']}
-
----
-Generado con ContentAI Pro • Meta Style
-"""
-
-        st.download_button(
-            label="📤 **Exportar**",
-            data=export_data,
-            file_name=f"meta_content_{content_data['platform'].lower()}_{content_data['timestamp'].strftime('%Y%m%d_%H%M')}.txt",
-            mime="text/plain",
-            use_container_width=True
-        )
-
-    # Detalles expandibles
-    with st.expander("🔍 Ver Detalles del Proceso"):
-        st.markdown(f"""
-        **📝 Parámetros:**
-        - **Tema:** {content_data['topic']}
-        - **Audiencia:** {content_data['audience']}
-        - **Tono:** {content_data['tone']}
-        - **Creador:** {content_data.get('creator_name', 'No especificado')}
-        - **Modelo:** {content_data['model']}
-        - **Timestamp:** {content_data['timestamp'].strftime('%Y-%m-%d %H:%M:%S')}
-
-        **📸 Imagen:**
-        - **Estado:** {content_data.get('image_status', 'Sin imagen')}
-        - **Fuente:** {"Unsplash" if content_data.get('image_data') else "ComfyUI" if content_data.get('image_path') else "No aplicable"}
-        """)
-
-# Mostrar contenido científico
-if st.session_state.get('scientific_content'):
-    st.markdown("---")
-    st.markdown("### 🧬 Contenido Científico (RAG)")
-    st.markdown(f"""
-    <div class='meta-card'>
-        <h4>🔬 {scientific_query if 'scientific_query' in locals() else 'Contenido Científico'}</h4>
-        <div class='meta-content-preview'>
-            {st.session_state.scientific_content.replace(chr(10), '<br>')}
-        </div>
-        <small style="color: var(--meta-gray-500);">✨ Generado con RAG, LangChain y LangSmith</small>
-    </div>
-    """, unsafe_allow_html=True)
-
-# Footer estilo Meta
+# Footer with improved information
 st.markdown("---")
-st.markdown("### 🚀 ContentAI Pro • Meta Professional")
-
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3 = st.columns(3)
 
 with col1:
     st.markdown("""
-    #### 🔮 Próximamente
-    - 📅 **Auto-scheduling**
-    - 🎨 **Editor integrado**
-    - 📊 **Analytics avanzados**
-    - 🔗 **API integrations**
-    - 🧪 **A/B Testing**
+    ### 🚀 Upcoming Features
+    - Automatic scheduling
+    - Multiple variations
+    - Engagement analysis
+    - Image editor
+    - Multi-language support
     """)
 
 with col2:
     st.markdown("""
-    #### 🤖 Motores IA
-    - 🚀 **Groq Llama3** (Ultra rápido)
-    - 🤖 **OpenAI GPT** (Versátil)
-    - 🏠 **Ollama** (Local/Privado)
-    - 🎯 **Demo Smart** (Gratuito)
-    - 🎨 **LM Studio + ComfyUI** (Visual)
+    ### 🔧 Supported APIs
+    - Groq Llama3 (Ultra fast)
+    - OpenAI GPT-3.5/4
+    - Ollama (Local)
+    - Unsplash (Images)
+    - Environment variables
     """)
 
 with col3:
     st.markdown("""
-    #### 📱 Plataformas
-    - 🐦 **Twitter/X** (Posts optimizados)
-    - 📸 **Instagram** (Visual content)
-    - 💼 **LinkedIn** (Professional)
-    - 📝 **Blog/Web** (Long-form)
-    - 🔜 **TikTok, YouTube**
+    ### 📊 Platforms
+    - Twitter/X
+    - Instagram
+    - LinkedIn
+    - Blog/Website
+    - Multi-language content
     """)
 
-with col4:
-    st.markdown("""
-    #### 🎨 Características
-    - 🖼️ **Auto-imágenes** (Unsplash)
-    - 🧠 **Análisis semántico**
-    - 📊 **Métricas real-time**
-    - 💾 **Export avanzado**
-    - 🧬 **RAG científico**
-    """)
-
-# Footer final
+# Additional information
 st.markdown("---")
 st.markdown("""
-<div style="text-align: center; color: var(--meta-gray-500); padding: 2rem 0;">
-    <p><strong>ContentAI Pro v3.0 Meta Style</strong> | Desarrollado con ❤️ y Streamlit</p>
-    <p>⚡ <strong>Powered by:</strong> Multi-IA, RAG, Análisis Semántico, Generación Visual</p>
-    <p>🌐 <strong>Multi-idioma:</strong> ES, EN, FR, DE, ZH, PT | 📧 <strong>Soporte 24/7</strong></p>
+<div style="text-align: center; color: #666; font-size: 0.9em;">
+    <p>🧠 <strong>AI Content Generator</strong> - Create engaging content optimized for any platform</p>
+    <p>Made with ❤️ using Streamlit | Version 2.0 | Multi-language support</p>
 </div>
 """, unsafe_allow_html=True)
