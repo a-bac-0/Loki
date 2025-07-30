@@ -5,7 +5,6 @@ import re
 import sys
 import time
 from datetime import datetime, timedelta
-
 import requests
 import streamlit as st
 
@@ -73,7 +72,6 @@ st.markdown("""
     
     .hero-section {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        background-size: 400% 400%;
         animation: gradientShift 8s ease infinite;
         padding: 4rem 3rem;
         border-radius: var(--radius-xl);
@@ -94,7 +92,6 @@ st.markdown("""
     .hero-section h1 {
         font-size: 3.5rem;
         font-weight: 800;
-        margin-bottom: 1.5rem;
         letter-spacing: -0.04em;
         text-shadow: 0 4px 6px rgba(0,0,0,0.1);
         position: relative;
@@ -234,11 +231,9 @@ st.markdown("""
     }
     
     .tips-card {
-        background: linear-gradient(135deg, #fef7ff, #faf5ff);
+        background: #e9d5ff;
         border: 1px solid #e9d5ff;
-        border-radius: var(--radius-lg);
-        padding: 1.5rem;
-        margin: 1rem 0;
+        padding: 0.1rem;
     }
     
     .tips-card h4 {
@@ -250,7 +245,7 @@ st.markdown("""
     .stTextInput > div > div > input {
         border-radius: var(--radius-md) !important;
         border: 2px solid var(--border-color) !important;
-        padding: 0.75rem 1rem !important;
+        padding: 0.50rem 1rem !important;
         font-size: 1rem !important;
         transition: all 0.3s ease !important;
     }
@@ -281,7 +276,7 @@ st.markdown("""
             font-size: 2.5rem;
         }
         .hero-section {
-            padding: 3rem 2rem;
+            padding: 2rem 2rem;
         }
     }
 </style>
@@ -1224,8 +1219,8 @@ with col1:
                         progress_bar.empty()
 
 with col2:
-    st.markdown('<div class="tips-card">', unsafe_allow_html=True)
     st.markdown("### 💡 Sugerencias Inteligentes")
+    st.markdown('<div class="tips-card">', unsafe_allow_html=True)
 
     platform_tips = {
         "Twitter": {
@@ -1284,15 +1279,16 @@ with col2:
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="tips-card">', unsafe_allow_html=True)
     st.markdown("#### 📄 Plantillas Rápidas")
+    st.markdown('<div class="tips-card">', unsafe_allow_html=True)
+
 
     quick_topics = [
-        {"text": "🔥 Tendencias 2025", "emoji": "🔥"},
-        {"text": "💡 Tips de productividad", "emoji": "💡"},
-        {"text": "🚀 Innovación tecnológica", "emoji": "🚀"},
-        {"text": "📈 Estrategias de crecimiento", "emoji": "📈"},
-        {"text": "🎯 Marketing efectivo", "emoji": "🎯"}
+        {"text": "Tendencias 2025", "emoji": "🔥"},
+        {"text": "Tips de productividad", "emoji": "💡"},
+        {"text": "Innovación tecnológica", "emoji": "🚀"},
+        {"text": "Estrategias de crecimiento", "emoji": "📈"},
+        {"text": "Marketing efectivo", "emoji": "🎯"}
     ]
 
     for topic_data in quick_topics:
